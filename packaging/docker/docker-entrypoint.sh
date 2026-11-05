@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Preserve the upstream RabbitMQ image behavior: root is used only to repair
+# the named data volume and then the process is re-executed as rabbitmq.
+if [[ "${1:-}" == rabbitmq* ]] && [ "$(id -u)" = '0' ]; then
+    if [ "$1" = 'rabbitmq-server' ]; then
+        find /var/lib/rabbitmq \! -user rabbitmq -exec chown rabbitmq '{}' +
+    fi
+
+    exec gosu rabbitmq /usr/local/bin/docker-entrypoint.sh "$@"
+fi
+
+deprecated_env_vars=(
+    RABBITMQ_DEFAULT_PASS_FILE
+    RABBITMQ_DEFAULT_USER_FILE
+    RABBITMQ_MANAGEMENT_SSL_CACERTFILE
+    RABBITMQ_MANAGEMENT_SSL_CERTFILE
+    RABBITMQ_MANAGEMENT_SSL_DEPTH
+    RABBITMQ_MANAGEMENT_SSL_FAIL_IF_NO_PEER_CERT
+    RABBITMQ_MANAGEMENT_SSL_KEYFILE
+    RABBITMQ_MANAGEMENT_SSL_VERIFY
+    RABBITMQ_SSL_CACERTFILE
+    RABBITMQ_SSL_CERTFILE
+    RABBITMQ_SSL_DEPTH
+    RABBITMQ_SSL_FAIL_IF_NO_PEER_CERT
+    RABBITMQ_SSL_KEYFILE
+    RABBITMQ_SSL_VERIFY
+    RABBITMQ_VM_MEMORY_HIGH_WATERMARK
+)
+
+found_deprecated_env=
+for name in "${deprecated_env_vars[@]}"; do
+    if [ -n "${!name:-}" ]; then
+        printf 'error: %s is set but deprecated\n' "$name" >&2
+        found_deprecated_env=1
+    fi
+done
+
+if [ -n "$found_deprecated_env" ]; then
+    printf 'error: deprecated environment variables detected\n\n' >&2
+    printf 'Use a RabbitMQ configuration file instead: https://www.rabbitmq.com/docs/configure\n' >&2
+    exit 1
+fi
+
+if [ -z "${RABBITMQ_USE_LONGNAME:-}" ] && [ "$(hostname)" != "$(hostname -s)" ]; then
+    : "${RABBITMQ_USE_LONGNAME:=true}"
+fi
+
+exec "$@"

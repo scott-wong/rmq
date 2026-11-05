@@ -1,0 +1,334 @@
+name: publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rmq-publish
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate release
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.resolve.outputs.version }}
+      upstream: ${{ steps.resolve.outputs.upstream }}
+      repo: ${{ steps.resolve.outputs.repo }}
+      build_args: ${{ steps.pins.outputs.args }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve and validate immutable release version
+        id: resolve
+        run: |
+          set -euo pipefail
+          VERSION="$(tr -d ' \n' < VERSION)"
+          test "${GITHUB_REF_NAME}" = "v${VERSION}"
+          UPSTREAM="${VERSION%%-*}"
+          REPO="$(printf 'ghcr.io/%s/rmq' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "version=${VERSION}"
+            echo "upstream=${UPSTREAM}"
+            echo "repo=${REPO}"
+          } >> "$GITHUB_OUTPUT"
+      - id: pins
+        name: Read immutable build arguments
+        run: |
+          {
+            echo 'args<<EOF'
+            bash scripts/print-build-args.sh
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - run: make verify
+      - run: bash scripts/install-security-tools.sh crane
+      - run: bash scripts/verify-remote-baselines.sh
+      - uses: actions/cache@v4
+        with:
+          path: distfiles
+          key: rmq-sources-${{ runner.os }}-${{ hashFiles('scripts/baseline.env') }}
+      - run: make fetch
+
+  candidate:
+    name: Build candidate
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/cache@v4
+        with:
+          path: distfiles
+          key: rmq-sources-${{ runner.os }}-${{ hashFiles('scripts/baseline.env') }}
+      - run: make fetch
+      - id: build
+        name: Build and push candidate
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile
+          target: rmq-final
+          platforms: linux/amd64
+          push: true
+          tags: ${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate
+          build-args: ${{ needs.validate.outputs.build_args }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=rmq-openeuler
+          cache-to: type=gha,mode=max,ignore-error=true,scope=rmq-openeuler
+
+  verify:
+    name: Verify candidate
+    needs:
+      - validate
+      - candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Pull candidate
+        run: |
+          docker pull \
+            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+      - name: Candidate acceptance tests
+        run: |
+          bash scripts/smoke-docker.sh \
+            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+
+  supply-chain:
+    name: Scan candidate
+    needs:
+      - validate
+      - candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: bash scripts/install-security-tools.sh syft trivy
+      - name: Pull candidate
+        run: |
+          docker pull \
+            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+          syft scan "docker:${REF}" --output cyclonedx-json \
+            > "artifacts/rmq-${{ needs.validate.outputs.version }}-openeuler.cyclonedx.json"
+      - name: Blocking Trivy scan
+        run: |
+          set -euo pipefail
+          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+          set +e
+          trivy image \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format sarif \
+            --output artifacts/trivy-openeuler.sarif \
+            "$REF"
+          rc=$?
+          trivy image \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format table \
+            "$REF" > artifacts/trivy-openeuler.txt 2>&1 || true
+          exit "$rc"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rmq-supply-chain
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: warn
+
+  promote:
+    name: Promote exact digest
+    needs:
+      - validate
+      - verify
+      - supply-chain
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      digest: ${{ steps.resolve.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: rmq-supply-chain
+          path: artifacts
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - run: bash scripts/install-security-tools.sh cosign crane
+      - id: resolve
+        name: Resolve and validate candidate digest
+        env:
+          REPO: ${{ needs.validate.outputs.repo }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          CANDIDATE="${REPO}:${VERSION}-openeuler-candidate"
+          DIGEST="$(crane digest "$CANDIDATE")"
+          [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          ARCH="$(crane config "${REPO}@${DIGEST}" | jq -r '.architecture')"
+          test "$ARCH" = "amd64"
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+      - name: Sign verified candidate digest with GitHub OIDC keyless Cosign
+        env:
+          REPO: ${{ needs.validate.outputs.repo }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DIGEST: ${{ steps.resolve.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
+          cosign sign --yes "${REPO}@${DIGEST}"
+          cosign attest --yes \
+            --predicate "$SBOM" \
+            --type cyclonedx \
+            "${REPO}@${DIGEST}"
+      - name: Verify signature and attestation
+        env:
+          REPO: ${{ needs.validate.outputs.repo }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DIGEST: ${{ steps.resolve.outputs.digest }}
+        run: |
+          set -euo pipefail
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yml@${GITHUB_REF}"
+          cosign verify \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${REPO}@${DIGEST}"
+          cosign verify-attestation \
+            --certificate-identity "$IDENTITY" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --type cyclonedx \
+            "${REPO}@${DIGEST}"
+          {
+            echo "image=${REPO}:${VERSION}-openeuler"
+            echo "digest=${DIGEST}"
+            echo "certificate-identity=${IDENTITY}"
+            echo "certificate-oidc-issuer=https://token.actions.githubusercontent.com"
+          } > release-assets/verification.txt
+      - name: Promote immutable tag and aliases by digest
+        env:
+          REPO: ${{ needs.validate.outputs.repo }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          UPSTREAM: ${{ needs.validate.outputs.upstream }}
+          DIGEST: ${{ steps.resolve.outputs.digest }}
+        run: |
+          set -euo pipefail
+          FULL_TAG="${VERSION}-openeuler"
+          if crane digest "${REPO}:${FULL_TAG}" >/dev/null 2>&1; then
+            EXISTING="$(crane digest "${REPO}:${FULL_TAG}")"
+            if [ "$EXISTING" != "$DIGEST" ]; then
+              echo "ERROR: immutable tag ${FULL_TAG} already points to ${EXISTING}" >&2
+              exit 1
+            fi
+          fi
+          for tag in "$FULL_TAG" "${UPSTREAM}-openeuler" "latest-openeuler"; do
+            crane copy "${REPO}@${DIGEST}" "${REPO}:${tag}"
+            test "$(crane digest "${REPO}:${tag}")" = "$DIGEST"
+          done
+      - name: Re-pull and verify final tag
+        run: |
+          IMAGE="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler"
+          docker pull "$IMAGE"
+          bash scripts/smoke-docker.sh "$IMAGE"
+      - name: Create release assets
+        env:
+          REPO: ${{ needs.validate.outputs.repo }}
+          VERSION: ${{ needs.validate.outputs.version }}
+          DIGEST: ${{ steps.resolve.outputs.digest }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
+          SARIF="artifacts/trivy-openeuler.sarif"
+          TRIVY_TEXT="artifacts/trivy-openeuler.txt"
+          cp "$SBOM" "release-assets/rmq-${VERSION}-openeuler.cyclonedx.json"
+          cp "$SARIF" release-assets/trivy-openeuler.sarif
+          cp "$TRIVY_TEXT" release-assets/trivy-openeuler.txt
+          IMAGE_REPO="$REPO" \
+          IMAGE_DIGEST="$DIGEST" \
+          SBOM_PATH="$SBOM" \
+          TRIVY_SARIF_PATH="$SARIF" \
+          TRIVY_TEXT_PATH="$TRIVY_TEXT" \
+          SOURCE_COMMIT="$GITHUB_SHA" \
+          WORKFLOW_RUN="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+          OUTPUT=release-assets/release-manifest.json \
+            bash scripts/generate-release-manifest.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rmq-release-assets
+          path: release-assets/
+          retention-days: 30
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs:
+      - validate
+      - promote
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: rmq-release-assets
+          path: release-assets
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.validate.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v${VERSION}" release-assets/* \
+            --title "RMQ ${VERSION}" \
+            --generate-notes \
+            --verify-tag

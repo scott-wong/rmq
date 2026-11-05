@@ -1,0 +1,10 @@
+/distfiles/
+/artifacts/
+/out/
+/.release/
+/test/certs/
+/.env
+/.ruff_cache/
+__pycache__/
+*.log
+.DS_Store

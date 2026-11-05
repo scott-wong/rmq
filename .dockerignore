@@ -1,0 +1,10 @@
+.git
+.github
+.release
+artifacts
+distfiles/*.asc
+examples
+out
+test
+*.log
+.DS_Store
