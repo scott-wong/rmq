@@ -19,7 +19,20 @@ cleanup() {
     "$DOCKER" network rm "$NETWORK" >/dev/null 2>&1 || true
     rm -rf "$TMPDIR_LOCAL"
 }
-trap cleanup EXIT
+
+on_exit() {
+    local exit_code=$?
+    if [ "$exit_code" -ne 0 ]; then
+        printf 'RMQ smoke test failed (exit %s); collecting diagnostics\n' \
+            "$exit_code" >&2
+        "$DOCKER" ps -a >&2 || true
+        "$DOCKER" logs --tail 200 "$CONTAINER" >&2 || true
+        "$DOCKER" exec "$CONTAINER" \
+            rabbitmq-diagnostics -q listeners >&2 || true
+    fi
+    cleanup
+}
+trap on_exit EXIT
 
 require_command "$DOCKER"
 require_command openssl
@@ -46,8 +59,13 @@ run_client() {
 
 wait_for_rabbitmq() {
     for _ in $(seq 1 90); do
-        if "$DOCKER" exec "$CONTAINER" \
-            rabbitmq-diagnostics -q ping >/dev/null 2>&1; then
+        listeners="$(
+            "$DOCKER" exec "$CONTAINER" \
+                rabbitmq-diagnostics -q listeners 2>/dev/null || true
+        )"
+        if [[ "$listeners" == *"port: 15671,"* ]] &&
+            [[ "$listeners" == *"port: 15672,"* ]] &&
+            [[ "$listeners" == *"port: 15692,"* ]]; then
             return 0
         fi
         sleep 2
