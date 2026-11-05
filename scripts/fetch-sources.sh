@@ -14,18 +14,36 @@ download() {
     local url="$2"
     local expected="$3"
     local target="$DISTFILES_DIR/$name"
+    local attempt
 
     if [ -f "$target" ] && [ "$(sha256_file "$target")" = "$expected" ]; then
         printf '[ok] %s\n' "$name"
         return 0
     fi
 
-    printf '[fetch] %s\n' "$name"
-    curl --fail --location --retry 5 --retry-all-errors \
-        --output "$target.part" "$url"
-    verify_sha256 "$target.part" "$expected"
-    mv "$target.part" "$target"
-    printf '[ok] %s\n' "$name"
+    for attempt in $(seq 1 3); do
+        printf '[fetch] %s (attempt %s/3)\n' "$name" "$attempt"
+        rm -f "$target.part"
+        if curl --fail --location \
+            --connect-timeout 20 \
+            --max-time 900 \
+            --retry 12 \
+            --retry-delay 5 \
+            --retry-max-time 180 \
+            --output "$target.part" "$url"; then
+            verify_sha256 "$target.part" "$expected"
+            mv "$target.part" "$target"
+            printf '[ok] %s\n' "$name"
+            return 0
+        fi
+        rm -f "$target.part"
+        if [ "$attempt" -lt 3 ]; then
+            printf '[retry] %s download failed; backing off 20 seconds\n' "$name" >&2
+            sleep 20
+        fi
+    done
+
+    die "failed to download $name after 3 attempts"
 }
 
 download "gosu-${GOSU_VERSION}.tar.gz" \
