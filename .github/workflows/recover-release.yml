@@ -1,0 +1,227 @@
+name: recover-release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing git tag to finish publishing
+        required: true
+        type: string
+      source_run_id:
+        description: Workflow run that built and signed the candidate
+        required: true
+        type: string
+      candidate_tag:
+        description: Existing candidate image tag
+        required: true
+        type: string
+      expected_digest:
+        description: Exact candidate manifest digest
+        required: true
+        type: string
+
+permissions:
+  actions: read
+  contents: write
+  packages: write
+
+concurrency:
+  group: rmq-recover-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    name: Recover verified release
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag }}
+          path: source
+          fetch-depth: 0
+
+      - name: Check out current recovery helper
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main-tools
+          fetch-depth: 1
+
+      - name: Download candidate supply-chain artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: rmq-supply-chain
+          path: source/artifacts
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate recovery inputs
+        id: meta
+        working-directory: source
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$EXPECTED_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          VERSION="$(tr -d ' \n' < VERSION)"
+          test "v${VERSION}" = "$RELEASE_TAG"
+          test "$CANDIDATE_TAG" = "${VERSION}-openeuler-candidate"
+          test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
+          test -f "artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
+          test -f artifacts/trivy-openeuler.sarif
+          test -f artifacts/trivy-openeuler.txt
+          OWNER="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          REPO="ghcr.io/${OWNER}/rmq"
+          UPSTREAM="${VERSION%%-*}"
+          {
+            echo "version=${VERSION}"
+            echo "upstream=${UPSTREAM}"
+            echo "repo=${REPO}"
+            echo "source_commit=$(git rev-parse HEAD)"
+            echo "source_run_url=https://github.com/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign and Crane
+        working-directory: source
+        run: bash scripts/install-security-tools.sh cosign crane
+
+      - name: Resolve exact candidate digest
+        id: candidate
+        working-directory: source
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+          CANDIDATE_TAG: ${{ inputs.candidate_tag }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+        run: |
+          set -euo pipefail
+          ACTUAL="$(crane digest "${REPO}:${CANDIDATE_TAG}")"
+          test "$ACTUAL" = "$EXPECTED_DIGEST"
+          ARCH="$(crane config "${REPO}@${ACTUAL}" | jq -r '.architecture')"
+          test "$ARCH" = "amd64"
+          echo "digest=${ACTUAL}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify existing signature and attestation
+        working-directory: source
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+          DIGEST: ${{ steps.candidate.outputs.digest }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yml@refs/tags/${RELEASE_TAG}"
+          bash ../main-tools/scripts/verify-cosign.sh \
+            "${REPO}@${DIGEST}" "$IDENTITY" artifacts
+
+      - name: Promote exact digest and aliases
+        working-directory: source
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          UPSTREAM: ${{ steps.meta.outputs.upstream }}
+          DIGEST: ${{ steps.candidate.outputs.digest }}
+        run: |
+          set -euo pipefail
+          FULL_TAG="${VERSION}-openeuler"
+          if crane digest "${REPO}:${FULL_TAG}" >/dev/null 2>&1; then
+            EXISTING="$(crane digest "${REPO}:${FULL_TAG}")"
+            test "$EXISTING" = "$DIGEST" \
+              || { echo "ERROR: immutable tag ${FULL_TAG} already points to ${EXISTING}" >&2; exit 1; }
+          fi
+          for tag in "$FULL_TAG" "${UPSTREAM}-openeuler" "latest-openeuler"; do
+            crane copy "${REPO}@${DIGEST}" "${REPO}:${tag}"
+            test "$(crane digest "${REPO}:${tag}")" = "$DIGEST"
+          done
+
+      - name: Re-pull and verify final tag
+        working-directory: source
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          IMAGE="${REPO}:${VERSION}-openeuler"
+          docker pull "$IMAGE"
+          bash scripts/smoke-docker.sh "$IMAGE"
+
+      - name: Make GHCR package public
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH /user/packages/container/rmq \
+            -f visibility=public
+
+      - name: Create release assets
+        working-directory: source
+        env:
+          REPO: ${{ steps.meta.outputs.repo }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          DIGEST: ${{ steps.candidate.outputs.digest }}
+          SOURCE_COMMIT: ${{ steps.meta.outputs.source_commit }}
+          SOURCE_RUN_URL: ${{ steps.meta.outputs.source_run_url }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
+          SARIF="artifacts/trivy-openeuler.sarif"
+          TRIVY_TEXT="artifacts/trivy-openeuler.txt"
+          cp "$SBOM" "release-assets/$(basename "$SBOM")"
+          cp "$SARIF" release-assets/trivy-openeuler.sarif
+          cp "$TRIVY_TEXT" release-assets/trivy-openeuler.txt
+          cp artifacts/cosign-verify.txt release-assets/cosign-verify.txt
+          cp artifacts/cosign-verify-attestation.txt release-assets/cosign-verify-attestation.txt
+          {
+            echo "image=${REPO}:${VERSION}-openeuler"
+            echo "digest=${DIGEST}"
+            echo "certificate-identity=https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yml@refs/tags/${{ inputs.release_tag }}"
+            echo "certificate-oidc-issuer=https://token.actions.githubusercontent.com"
+            echo "source-run=${SOURCE_RUN_URL}"
+          } > release-assets/verification.txt
+          IMAGE_REPO="$REPO" \
+          IMAGE_DIGEST="$DIGEST" \
+          SBOM_PATH="$SBOM" \
+          TRIVY_SARIF_PATH="$SARIF" \
+          TRIVY_TEXT_PATH="$TRIVY_TEXT" \
+          SOURCE_COMMIT="$SOURCE_COMMIT" \
+          WORKFLOW_RUN="$SOURCE_RUN_URL" \
+          OUTPUT=release-assets/release-manifest.json \
+            bash scripts/generate-release-manifest.sh
+
+      - name: Upload recovery assets
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmq-release-recovery
+          path: source/release-assets/
+          retention-days: 30
+
+      - name: Create GitHub Release
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ steps.meta.outputs.version }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "ERROR: release ${RELEASE_TAG} already exists" >&2
+            exit 1
+          fi
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --title "RMQ ${VERSION}" \
+            --generate-notes \
+            --verify-tag

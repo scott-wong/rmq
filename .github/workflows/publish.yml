@@ -244,15 +244,8 @@ jobs:
         run: |
           set -euo pipefail
           IDENTITY="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yml@${GITHUB_REF}"
-          cosign verify \
-            --certificate-identity "$IDENTITY" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            "${REPO}@${DIGEST}"
-          cosign verify-attestation \
-            --certificate-identity "$IDENTITY" \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            --type cyclonedx \
-            "${REPO}@${DIGEST}"
+          bash scripts/verify-cosign.sh \
+            "${REPO}@${DIGEST}" "$IDENTITY" artifacts
           {
             echo "image=${REPO}:${VERSION}-openeuler"
             echo "digest=${DIGEST}"
