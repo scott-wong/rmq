@@ -103,11 +103,11 @@ def http_get(
 
     try:
         with urllib.request.urlopen(request, context=context, timeout=10) as response:
-            return response.status, response.read(4096).decode(
+            return response.status, response.read(1024 * 1024).decode(
                 "utf-8", errors="replace"
             )
     except urllib.error.HTTPError as exc:
-        return exc.code, exc.read(4096).decode("utf-8", errors="replace")
+        return exc.code, exc.read(1024 * 1024).decode("utf-8", errors="replace")
 
 
 def _basic_auth(username: str, password: str) -> str:
@@ -144,7 +144,9 @@ def http_checks() -> None:
 
     status, body = http_get(f"http://{host}:15692/metrics")
     if status != 200 or "rabbitmq_" not in body:
-        raise RuntimeError(f"Prometheus endpoint failed: HTTP {status}")
+        raise RuntimeError(
+            f"Prometheus endpoint failed: HTTP {status}; body prefix={body[:200]!r}"
+        )
 
     print("management HTTP/HTTPS, secure guest policy and metrics checks passed")
 
