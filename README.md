@@ -104,8 +104,8 @@ make smoke IMAGE=rmq:4.4.0-rmq.1-openeuler
 源码包或测试依赖。
 
 openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level 由签名仓库在
-构建时解析；因此不同日期重建同一 git commit 不保证字节级相同。每个发布镜像仍按
-不可变 digest 固定，实际 RPM 集合进入 SBOM。详见
+构建时解析，并先应用 `dnf upgrade --security`；因此不同日期重建同一 git commit
+不保证字节级相同。每个发布镜像仍按不可变 digest 固定，实际 RPM 集合进入 SBOM。详见
 [`docs/adr/0005-signed-floating-rpms.md`](docs/adr/0005-signed-floating-rpms.md)。
 
 ## 验收范围

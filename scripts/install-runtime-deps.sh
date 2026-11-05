@@ -5,6 +5,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 bash "$SCRIPT_DIR/configure-openeuler-repo.sh"
 
 dnf -y --setopt=max_parallel_downloads=10 makecache
+dnf -y --setopt=max_parallel_downloads=10 upgrade --security
 dnf install -y --setopt=install_weak_deps=False \
     --setopt=max_parallel_downloads=10 \
     ca-certificates \

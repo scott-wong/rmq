@@ -9,6 +9,8 @@ openEuler 基础镜像只固定 OCI tag 对应的 index digest；`dnf install` �
 
 - 基础镜像以 index digest 固定，tag 漂移由 CI 检测。
 - RPM 仓库只接受 HTTPS，并通过基础镜像自带的 openEuler GPG key 校验签名。
+- 最终阶段先执行 `dnf upgrade --security`，再安装运行依赖，应用仓库当前提供的
+  openEuler 安全更新。
 - 每个最终镜像按不可变 digest 发布，SBOM 记录实际安装的 RPM 集合。
 - `VERSION` 的 `rmq.N` 修订用于安全重建；重建与旧镜像在 digest 上明确不同。
 
