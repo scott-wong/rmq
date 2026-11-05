@@ -125,8 +125,10 @@ openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level �
 ## 供应链验证
 
 Release 附件包含 CycloneDX SBOM、Trivy 报告和
-`release-manifest.json`。最终镜像 digest 使用 GitHub OIDC keyless
-Cosign 签名，并附加 SBOM attestation。
+`release-manifest.json`。SBOM 由 Syft 生成，并补充 Syft 未自动识别的
+RabbitMQ 通用发行包、`rabbitmqadmin`、gosu 版本及各构建输入的源码归档
+SHA256。最终镜像 digest 使用 GitHub OIDC keyless Cosign 签名，并附加 SBOM
+attestation。
 
 ```sh
 cosign verify \

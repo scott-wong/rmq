@@ -148,6 +148,12 @@ jobs:
           REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
           syft scan "docker:${REF}" --output cyclonedx-json \
             > "artifacts/rmq-${{ needs.validate.outputs.version }}-openeuler.cyclonedx.json"
+      - name: Enrich CycloneDX SBOM with RMQ build inputs
+        env:
+          IMAGE_VERSION: ${{ needs.validate.outputs.version }}-openeuler
+        run: |
+          bash scripts/enrich-sbom.sh \
+            "artifacts/rmq-${{ needs.validate.outputs.version }}-openeuler.cyclonedx.json"
       - name: Blocking Trivy scan
         run: |
           set -euo pipefail
