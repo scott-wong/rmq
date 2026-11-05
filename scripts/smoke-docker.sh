@@ -35,10 +35,10 @@ run_client() {
         -e RMQ_HOST=rmq-test \
         -e RMQ_USER="$USER_NAME" \
         -e RMQ_PASSWORD="$USER_PASSWORD" \
-        -e RMQ_CAFILE=/test/certs/ca.crt \
-        -e AMQP_CAFILE=/test/certs/ca.crt \
+        -e RMQ_CAFILE=/certs/ca.crt \
+        -e AMQP_CAFILE=/certs/ca.crt \
         -v "$ROOT_DIR/test/smoke:/test:ro" \
-        -v "$TMPDIR_LOCAL/certs:/test/certs:ro" \
+        -v "$TMPDIR_LOCAL/certs:/certs:ro" \
         "$@" \
         "$TEST_PYTHON_IMAGE" \
         bash -c "python -m pip install --no-cache-dir --require-hashes -q -r /test/requirements.txt && python /test/client.py $mode"
