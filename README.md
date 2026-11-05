@@ -71,6 +71,10 @@ RMQ 不内置 `HEALTHCHECK`，与官方镜像一致。Compose 示例提供外部
 
 入口脚本只负责官方镜像已有的降权和环境变量防护，不自动创建用户或修改 TLS 配置。
 
+RabbitMQ 4.4 在只配置 `management.ssl.*` 时会进入 HTTPS-only 模式，不再启动
+15672 明文监听器。若需要同时保留 HTTP 与 HTTPS，须显式设置
+`management.tcp.port = 15672`；冒烟测试的 TLS 覆盖配置即采用该方式。
+
 ## 版本与标签
 
 `VERSION` 是唯一版本事实源，格式为 `<上游版本>-rmq.<修订号>`。一个正式版本发布：
