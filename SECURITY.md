@@ -13,6 +13,9 @@ the issue applies to the official RabbitMQ image.
 
 - `guest` is restricted to loopback by default.
 - No default password is included in the image or Compose example.
+- `RABBITMQ_DEFAULT_*` is a development/CI convenience. Production deployments
+  should provision users through controlled configuration/definitions and a
+  secret manager.
 - The container entrypoint starts as root only to repair the data volume and
   immediately re-executes as the `rabbitmq` UID. The broker process itself is
   non-root. RMQ intentionally preserves this official-image behavior, so a

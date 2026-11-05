@@ -35,6 +35,10 @@ docker run --detach \
 管理界面为 `http://127.0.0.1:15672/`，Prometheus 指标为
 `http://127.0.0.1:15692/metrics`。
 
+`RABBITMQ_DEFAULT_*` 环境变量适合开发、CI 和首次启动示例；上游文档明确不建议
+把它作为生产用户管理方案。生产部署应通过受控的 `rabbitmq.conf`、definitions
+或外部密钥管理流程创建用户，避免密码出现在容器环境变量中。
+
 更完整的安全部署起点见
 [`examples/docker-compose/rmq-single`](examples/docker-compose/rmq-single/README.md)。
 
