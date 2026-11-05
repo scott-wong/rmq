@@ -138,8 +138,10 @@ cosign verify \
 ```
 
 Trivy 阻断 `HIGH`/`CRITICAL` 中已有修复版本的漏洞与 secret 命中；未修复漏洞仍会
-进入报告。Trivy 对 openEuler RPM 漏洞库覆盖有限，因此 RMQ 不宣称“零漏洞”或
-“已完成 openEuler 全量安全审计”。
+进入报告。当前 Trivy `0.76.1` 把本镜像的 OS family 识别为 `none`，不会扫描
+openEuler RPM 的 CVE；阻断范围实际是 Go、Python 等可识别的语言包和 secret。
+工作流另附非阻断的 `dnf updateinfo --security` 证据，但它不能替代 openEuler
+漏洞数据库。因此 RMQ 不宣称“零漏洞”或“已完成 openEuler 全量安全审计”。
 
 ## 国密
 
