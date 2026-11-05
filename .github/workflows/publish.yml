@@ -222,6 +222,14 @@ jobs:
           ARCH="$(crane config "${REPO}@${DIGEST}" | jq -r '.architecture')"
           test "$ARCH" = "amd64"
           echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+      - name: Ensure GHCR package is public
+        continue-on-error: true
+        timeout-minutes: 2
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api --method PATCH /user/packages/container/rmq \
+            -f visibility=public
       - name: Sign verified candidate digest with GitHub OIDC keyless Cosign
         env:
           REPO: ${{ needs.validate.outputs.repo }}
@@ -237,6 +245,7 @@ jobs:
             --type cyclonedx \
             "${REPO}@${DIGEST}"
       - name: Verify signature and attestation
+        timeout-minutes: 5
         env:
           REPO: ${{ needs.validate.outputs.repo }}
           VERSION: ${{ needs.validate.outputs.version }}
