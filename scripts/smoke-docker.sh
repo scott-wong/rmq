@@ -29,10 +29,10 @@ run_client() {
     shift
     "$DOCKER" run --rm \
         --network "$NETWORK" \
-        -e AMQP_HOST="$CONTAINER" \
+        -e AMQP_HOST=rmq-test \
         -e AMQP_USER="$USER_NAME" \
         -e AMQP_PASSWORD="$USER_PASSWORD" \
-        -e RMQ_HOST="$CONTAINER" \
+        -e RMQ_HOST=rmq-test \
         -e RMQ_USER="$USER_NAME" \
         -e RMQ_PASSWORD="$USER_PASSWORD" \
         -e RMQ_CAFILE=/test/certs/ca.crt \
@@ -64,6 +64,7 @@ bash "$ROOT_DIR/test/smoke/generate-certs.sh" "$TMPDIR_LOCAL/certs"
     --name "$CONTAINER" \
     --hostname rmq-test \
     --network "$NETWORK" \
+    --network-alias rmq-test \
     -e RABBITMQ_DEFAULT_USER="$USER_NAME" \
     -e RABBITMQ_DEFAULT_PASS="$USER_PASSWORD" \
     -v "$TMPDIR_LOCAL/certs:/etc/rabbitmq/certs:ro" \
@@ -90,11 +91,14 @@ wait_for_rabbitmq
     test ! -d /opt/openssl/include
     ! command -v gcc >/dev/null 2>&1
     ! command -v make >/dev/null 2>&1
-    /opt/openssl/bin/openssl version | grep -q "OpenSSL 3.5.9"
+    openssl_version="$(/opt/openssl/bin/openssl version)"
+    [[ "$openssl_version" == "OpenSSL 3.5.9 "* ]]
     /opt/erlang/bin/erl -noshell -eval "ok = crypto:start(), init:stop()."
-    rabbitmq-plugins list -e | grep -q rabbitmq_management
-    rabbitmq-plugins list -e | grep -q rabbitmq_prometheus
-    rabbitmqctl version | grep -q "4.4.0"
+    enabled_plugins="$(rabbitmq-plugins list -e)"
+    [[ "$enabled_plugins" == *rabbitmq_management* ]]
+    [[ "$enabled_plugins" == *rabbitmq_prometheus* ]]
+    rabbitmq_version="$(rabbitmqctl version)"
+    [[ "$rabbitmq_version" == *"4.4.0"* ]]
     rabbitmqadmin --help >/dev/null
 '
 
