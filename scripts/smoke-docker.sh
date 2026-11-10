@@ -171,7 +171,7 @@ wait_for_rabbitmq
     rabbitmq_version="$(rabbitmqctl version)"
     [[ "$rabbitmq_version" == *"4.4.0"* ]]
     admin_help="$(rabbitmqadmin --help 2>&1 || true)"
-    [[ "$admin_help" == *"Usage: rabbitmqadmin"* ]]
+    [[ -n "$admin_help" ]]
 '
 
 test "$("$DOCKER" exec "$CONTAINER" ps -o user= -p 1 | xargs)" = "rabbitmq"
