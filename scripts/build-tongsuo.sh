@@ -35,6 +35,42 @@ cd "$source_dir"
 make -j"$(nproc)"
 make install_sw install_ssldirs
 
+# Erlang/OTP 29 includes these legacy OpenSSL headers unconditionally even
+# though Tongsuo 8.5 no longer ships them. The compatibility headers only
+# declare the corresponding algorithms unavailable; they add no implementation.
+compat_include="$prefix/include/openssl"
+mkdir -p "$compat_include"
+if [ ! -f "$compat_include/md4.h" ]; then
+    printf '%s\n' \
+        '#ifndef OPENSSL_NO_MD4' \
+        '# define OPENSSL_NO_MD4' \
+        '#endif' > "$compat_include/md4.h"
+fi
+if [ ! -f "$compat_include/ripemd.h" ]; then
+    printf '%s\n' \
+        '#ifndef OPENSSL_NO_RMD160' \
+        '# define OPENSSL_NO_RMD160' \
+        '#endif' \
+        '#ifndef OPENSSL_NO_RIPEMD160' \
+        '# define OPENSSL_NO_RIPEMD160' \
+        '#endif' \
+        '#ifndef OPENSSL_NO_RIPEMD' \
+        '# define OPENSSL_NO_RIPEMD' \
+        '#endif' > "$compat_include/ripemd.h"
+fi
+if [ ! -f "$compat_include/blowfish.h" ]; then
+    printf '%s\n' \
+        '#ifndef OPENSSL_NO_BF' \
+        '# define OPENSSL_NO_BF' \
+        '#endif' > "$compat_include/blowfish.h"
+fi
+if [ ! -f "$compat_include/rc2.h" ]; then
+    printf '%s\n' \
+        '#ifndef OPENSSL_NO_RC2' \
+        '# define OPENSSL_NO_RC2' \
+        '#endif' > "$compat_include/rc2.h"
+fi
+
 mkdir -p "$prefix/share/licenses/tongsuo"
 cp "$source_dir/LICENSE.txt" "$prefix/share/licenses/tongsuo/LICENSE.txt"
 
