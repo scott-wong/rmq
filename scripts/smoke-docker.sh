@@ -184,6 +184,16 @@ printf 'smoke: process user check passed\n'
 '
 printf 'smoke: Tongsuo linkage check passed\n'
 
+printf 'smoke metadata: user=%s entrypoint=%s cmd=%s health=%s guest=%s variant=%s gm-enabled=%s gm-tls=%s\n' \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.User}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.Entrypoint}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.Cmd}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{json .Config.Healthcheck}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.variant"}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" \
+    "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.tls"}}')"
+
 test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.User}}')" = ""
 test "$("$DOCKER" inspect "$CONTAINER" --format '{{json .Config.Healthcheck}}')" = "null"
 test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.Entrypoint}}')" = "[docker-entrypoint.sh]"
