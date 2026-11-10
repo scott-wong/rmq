@@ -125,7 +125,7 @@ wait_for_rabbitmq
     -e SSL_LICENSE_NAME="$SSL_LICENSE_NAME" \
     -e GM_STORAGE="$GM_STORAGE" \
     "$CONTAINER" bash -c '
-    set -euxo pipefail
+    set -euo pipefail
     test "$(readlink /plugins)" = "/opt/rabbitmq/plugins"
     test -f /etc/rabbitmq/conf.d/10-defaults.conf
     grep -q "^loopback_users.guest = true$" /etc/rabbitmq/conf.d/10-defaults.conf
