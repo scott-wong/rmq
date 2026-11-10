@@ -13,9 +13,17 @@ check_reference() {
     local pinned="$2"
     local expected="$3"
     local tag_ref="${pinned%%@*}"
-    local actual
+    local actual=""
+    local attempt
 
-    actual="$(crane digest "$tag_ref")"
+    for attempt in 1 2 3; do
+        if actual="$(crane digest "$tag_ref")"; then
+            break
+        fi
+        [ "$attempt" -lt 3 ] || die "$name digest lookup failed after 3 attempts"
+        printf '[retry] %s digest lookup failed; retrying in 5 seconds\n' "$name" >&2
+        sleep 5
+    done
     [[ "$actual" =~ ^sha256:[0-9a-f]{64}$ ]] \
         || die "$name returned an invalid digest: $actual"
     [ "$actual" = "$expected" ] \
