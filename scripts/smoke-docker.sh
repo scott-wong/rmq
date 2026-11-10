@@ -170,13 +170,7 @@ wait_for_rabbitmq
     fi
     rabbitmq_version="$(rabbitmqctl version)"
     [[ "$rabbitmq_version" == *"4.4.0"* ]]
-    admin_help="$(rabbitmqadmin --help 2>&1 || true)"
-    if [ -n "$admin_help" ]; then
-        echo smoke-static-admin-ok
-    else
-        echo smoke-static-admin-empty >&2
-        exit 1
-    fi
+    rabbitmqadmin --version >/dev/null
 '
 
 test "$("$DOCKER" exec "$CONTAINER" ps -o user= -p 1 | xargs)" = "rabbitmq"
