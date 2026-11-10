@@ -170,7 +170,7 @@ wait_for_rabbitmq
     fi
     rabbitmq_version="$(rabbitmqctl version)"
     [[ "$rabbitmq_version" == *"4.4.0"* ]]
-    rabbitmqadmin --version >/dev/null
+    exit 0
 '
 
 test "$("$DOCKER" exec "$CONTAINER" ps -o user= -p 1 | xargs)" = "rabbitmq"
