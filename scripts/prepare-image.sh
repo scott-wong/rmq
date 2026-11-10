@@ -14,7 +14,10 @@ require_command erl
 
 rabbitmq_home="/opt/rabbitmq"
 rabbitmq_data_dir="/var/lib/rabbitmq"
-openssl_prefix="/opt/openssl"
+ssl_prefix="${SSL_PREFIX:-/opt/openssl}"
+ssl_kind="${SSL_KIND:-openssl}"
+ssl_version="${SSL_VERSION:-${OPENSSL_VERSION}}"
+gm_plugin_available="${GM_PLUGIN_AVAILABLE:-false}"
 
 groupadd --gid 999 --system rabbitmq
 useradd --uid 999 --system \
@@ -48,35 +51,45 @@ ln -sf "$rabbitmq_data_dir/.erlang.cookie" /root/.erlang.cookie
 ln -sf "$rabbitmq_home/plugins" /plugins
 
 mkdir -p /etc/ssl/private
-rm -rf "$openssl_prefix/etc/ssl/certs" "$openssl_prefix/etc/ssl/private"
-ln -sfn /etc/ssl/certs "$openssl_prefix/etc/ssl/certs"
-ln -sfn /etc/ssl/private "$openssl_prefix/etc/ssl/private"
-sed -i.ORIG \
-    -e "/\.include.*fips/ s!.*!.include $openssl_prefix/etc/ssl/fipsmodule.cnf!" \
-    -e '/# fips =/s/.*/fips = fips_sect/' \
-    "$openssl_prefix/etc/ssl/openssl.cnf"
-sed -i.ORIG -e '/^activate/s/^/#/' \
-    "$openssl_prefix/etc/ssl/fipsmodule.cnf"
+mkdir -p "$ssl_prefix/etc/ssl"
+rm -rf "$ssl_prefix/etc/ssl/certs" "$ssl_prefix/etc/ssl/private"
+ln -sfn /etc/ssl/certs "$ssl_prefix/etc/ssl/certs"
+ln -sfn /etc/ssl/private "$ssl_prefix/etc/ssl/private"
+if [ "$ssl_kind" = "openssl" ] &&
+    [ -f "$ssl_prefix/etc/ssl/openssl.cnf" ] &&
+    [ -f "$ssl_prefix/etc/ssl/fipsmodule.cnf" ]; then
+    sed -i.ORIG \
+        -e "/\.include.*fips/ s!.*!.include $ssl_prefix/etc/ssl/fipsmodule.cnf!" \
+        -e '/# fips =/s/.*/fips = fips_sect/' \
+        "$ssl_prefix/etc/ssl/openssl.cnf"
+    sed -i.ORIG -e '/^activate/s/^/#/' \
+        "$ssl_prefix/etc/ssl/fipsmodule.cnf"
+fi
 
 ldconfig
 openssl version
 
 rm -rf \
-    /opt/openssl/include \
-    /opt/openssl/lib/pkgconfig \
-    /opt/openssl/share/doc \
-    /opt/openssl/share/man
-find /opt/openssl/lib -maxdepth 1 -type f -name '*.a' -delete
+    "$ssl_prefix/include" \
+    "$ssl_prefix/lib/pkgconfig" \
+    "$ssl_prefix/share/doc" \
+    "$ssl_prefix/share/man"
+find "$ssl_prefix/lib" -maxdepth 1 -type f -name '*.a' -delete
 rm -f \
-    /opt/openssl/etc/ssl/openssl.cnf.ORIG \
-    /opt/openssl/etc/ssl/fipsmodule.cnf.ORIG
+    "$ssl_prefix/etc/ssl/openssl.cnf.ORIG" \
+    "$ssl_prefix/etc/ssl/fipsmodule.cnf.ORIG"
 
 cp /opt/rmq/stage/10-defaults.conf /etc/rabbitmq/conf.d/10-defaults.conf
 chown rabbitmq:rabbitmq /etc/rabbitmq/conf.d/10-defaults.conf
 chmod 0644 /etc/rabbitmq/conf.d/10-defaults.conf
 
-gosu rabbitmq rabbitmq-plugins enable --offline \
-    rabbitmq_management rabbitmq_prometheus
+plugins=(rabbitmq_management rabbitmq_prometheus)
+if [ "$gm_plugin_available" = "true" ]; then
+    test -d "$rabbitmq_home/plugins/rabbitmq_gm-${RABBITMQ_VERSION}" \
+        || die "rabbitmq_gm plugin directory is missing"
+    plugins+=(rabbitmq_gm)
+fi
+gosu rabbitmq rabbitmq-plugins enable --offline "${plugins[@]}"
 
 [ ! -e "$rabbitmq_data_dir/.erlang.cookie" ] || rm -f "$rabbitmq_data_dir/.erlang.cookie"
 gosu rabbitmq rabbitmqctl help >/dev/null
@@ -91,7 +104,7 @@ erl -noshell -eval \
 crypto_objects="$(find /opt/erlang -type f -name crypto.so)"
 test -n "$crypto_objects"
 find /opt/erlang -type f -name crypto.so -exec ldd '{}' \; \
-    | awk -v prefix="$openssl_prefix" '/libcrypto\.so/ { if (!index($0, prefix)) exit 1 }'
+    | awk -v prefix="$ssl_prefix" '/libcrypto\.so/ { if (!index($0, prefix)) exit 1 }'
 
 cat > /usr/local/share/rmq/build-info.json <<EOF
 {
@@ -100,7 +113,10 @@ cat > /usr/local/share/rmq/build-info.json <<EOF
   "upstream": {
     "rabbitmq": "${RABBITMQ_VERSION}",
     "erlangOtp": "${OTP_VERSION}",
-    "openssl": "${OPENSSL_VERSION}"
+    "ssl": {
+      "kind": "${ssl_kind}",
+      "version": "${ssl_version}"
+    }
   },
   "tools": {
     "gosu": "${GOSU_VERSION}",
@@ -114,11 +130,13 @@ cat > /usr/local/share/rmq/build-info.json <<EOF
     "guestLoopbackOnly": true,
     "managementEnabled": true,
     "prometheusEnabled": true,
-    "builtInHealthcheck": false
+    "builtInHealthcheck": false,
+    "gmStoragePluginAvailable": ${gm_plugin_available}
   },
   "claims": {
     "openEulerDistribution": true,
-    "nationalCryptography": false,
+    "nationalCryptographyTls": false,
+    "nationalCryptographyStorage": ${gm_plugin_available},
     "fipsCompliance": false,
     "clusterTested": false
   }

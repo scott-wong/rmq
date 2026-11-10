@@ -4,6 +4,21 @@ set -euo pipefail
 # Preserve the upstream RabbitMQ image behavior: root is used only to repair
 # the named data volume and then the process is re-executed as rabbitmq.
 if [[ "${1:-}" == rabbitmq* ]] && [ "$(id -u)" = '0' ]; then
+    key_file="${RMQ_GM_KEY_FILE:-/etc/rabbitmq/gm.key}"
+    if [ "${GM_PLUGIN_AVAILABLE:-false}" = "true" ] && [ ! -f "$key_file" ]; then
+        printf 'error: GM storage encryption is enabled but %s is missing\n' \
+            "$key_file" >&2
+        exit 1
+    fi
+    if [ -f "$key_file" ]; then
+        mkdir -p /run/rmq
+        chown rabbitmq:rabbitmq /run/rmq
+        chmod 0700 /run/rmq
+        cp "$key_file" /run/rmq/gm.key
+        chown rabbitmq:rabbitmq /run/rmq/gm.key
+        chmod 0600 /run/rmq/gm.key
+        export RMQ_GM_KEY_FILE=/run/rmq/gm.key
+    fi
     if [ "$1" = 'rabbitmq-server' ]; then
         find /var/lib/rabbitmq \! -user rabbitmq -exec chown rabbitmq '{}' +
     fi

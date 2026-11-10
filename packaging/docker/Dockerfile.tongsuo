@@ -1,0 +1,159 @@
+# syntax=docker/dockerfile:1.7
+
+ARG OPENEULER_BASE
+ARG GOLANG_BASE
+ARG RMQ_VERSION
+ARG RABBITMQ_VERSION
+ARG OTP_VERSION
+ARG OPENSSL_VERSION
+ARG TONGSHUO_VERSION
+ARG TONGSHUO_OPENSSL_VERSION
+ARG GOSU_VERSION
+ARG RABBITMQADMIN_VERSION
+ARG OPENEULER_BASE_DIGEST
+
+FROM ${GOLANG_BASE} AS gosu-builder
+
+ENV CGO_ENABLED=0
+WORKDIR /opt/rmq
+
+COPY scripts/baseline.env scripts/lib.sh scripts/build-gosu.sh /opt/rmq/scripts/
+COPY distfiles/gosu-*.tar.gz /opt/rmq/distfiles/
+
+RUN DISTFILES_DIR=/opt/rmq/distfiles \
+    bash /opt/rmq/scripts/build-gosu.sh
+
+FROM ${OPENEULER_BASE} AS tongsuo-builder
+
+WORKDIR /opt/rmq
+
+COPY scripts/baseline.env scripts/lib.sh scripts/configure-openeuler-repo.sh \
+     scripts/install-build-deps.sh /opt/rmq/scripts/
+RUN bash /opt/rmq/scripts/install-build-deps.sh
+
+COPY scripts/build-tongsuo.sh /opt/rmq/scripts/
+COPY distfiles/tongsuo-*.tar.gz /opt/rmq/distfiles/
+RUN DISTFILES_DIR=/opt/rmq/distfiles \
+    bash /opt/rmq/scripts/build-tongsuo.sh
+
+FROM tongsuo-builder AS erlang-builder
+
+ENV PATH=/opt/tongsuo/bin:$PATH
+
+COPY scripts/build-otp.sh /opt/rmq/scripts/
+COPY distfiles/otp_src_*.tar.gz /opt/rmq/distfiles/
+RUN DISTFILES_DIR=/opt/rmq/distfiles \
+    SSL_PREFIX=/opt/tongsuo \
+    bash /opt/rmq/scripts/build-otp.sh
+
+FROM ${OPENEULER_BASE} AS rabbitmq-builder
+
+# hadolint ignore=DL3041
+RUN dnf install -y --setopt=install_weak_deps=False tar xz \
+    && dnf clean all
+
+WORKDIR /opt/rmq
+COPY scripts/baseline.env scripts/lib.sh scripts/extract-rabbitmq.sh /opt/rmq/scripts/
+COPY distfiles/rabbitmq-server-generic-unix-*.tar.xz /opt/rmq/distfiles/
+RUN DISTFILES_DIR=/opt/rmq/distfiles \
+    bash /opt/rmq/scripts/extract-rabbitmq.sh
+
+FROM erlang-builder AS gm-plugin-builder
+
+ENV PATH=/opt/erlang/bin:/opt/tongsuo/bin:$PATH
+
+COPY packaging/plugin/rabbitmq_gm /opt/rmq/plugin/rabbitmq_gm
+COPY --from=rabbitmq-builder \
+     /opt/rabbitmq/plugins/rabbit-4.4.0/include \
+     /opt/rmq/rabbit-includes/rabbit
+COPY --from=rabbitmq-builder \
+     /opt/rabbitmq/plugins/rabbit_common-4.4.0/include \
+     /opt/rmq/rabbit-includes/rabbit_common
+RUN mkdir -p /out/rabbitmq_gm-4.4.0/ebin \
+    && erlc -o /out/rabbitmq_gm-4.4.0/ebin \
+        -I /opt/rmq/rabbit-includes/rabbit \
+        -I /opt/rmq/rabbit-includes/rabbit_common \
+        /opt/rmq/plugin/rabbitmq_gm/src/*.erl \
+    && cp /opt/rmq/plugin/rabbitmq_gm/src/rabbitmq_gm.app \
+        /out/rabbitmq_gm-4.4.0/ebin/rabbitmq_gm.app
+
+FROM ${OPENEULER_BASE} AS rmq-tongsuo-final
+
+ARG RMQ_VERSION
+ARG RABBITMQ_VERSION
+ARG OTP_VERSION
+ARG TONGSHUO_VERSION
+ARG TONGSHUO_OPENSSL_VERSION
+ARG GOSU_VERSION
+ARG RABBITMQADMIN_VERSION
+ARG OPENEULER_BASE_DIGEST
+
+LABEL org.opencontainers.image.title="RMQ Tongsuo" \
+      org.opencontainers.image.description="RabbitMQ 4.4 management distribution for openEuler with Tongsuo" \
+      org.opencontainers.image.version="${RMQ_VERSION}" \
+      org.opencontainers.image.url="https://github.com/scott-wong/rmq" \
+      org.opencontainers.image.source="https://github.com/scott-wong/rmq" \
+      org.opencontainers.image.documentation="https://github.com/scott-wong/rmq/blob/main/README.md" \
+      org.opencontainers.image.licenses="Apache-2.0 AND MPL-2.0" \
+      org.opencontainers.image.base.name="quay.io/openeuler/openeuler:24.03-lts-sp4" \
+      org.opencontainers.image.base.digest="${OPENEULER_BASE_DIGEST}" \
+      org.opencontainers.image.vendor="RMQ" \
+      io.rmq.variant="tongsuo-openeuler" \
+      io.rmq.rabbitmq.version="${RABBITMQ_VERSION}" \
+      io.rmq.erlang.version="${OTP_VERSION}" \
+      io.rmq.tongsuo.version="${TONGSHUO_VERSION}" \
+      io.rmq.tongsuo.openssl-base="${TONGSHUO_OPENSSL_VERSION}" \
+      io.rmq.gosu.version="${GOSU_VERSION}" \
+      io.rmq.rabbitmqadmin.version="${RABBITMQADMIN_VERSION}" \
+      io.rmq.security.guest-loopback-only="true" \
+      io.rmq.gm.storage-plugin="rabbitmq_gm" \
+      io.rmq.gm.storage-plugin-enabled="true" \
+      io.rmq.gm.tls="false" \
+      io.rmq.healthcheck.built-in="false"
+
+ENV PATH=/opt/rabbitmq/sbin:/opt/erlang/bin:/opt/tongsuo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \
+    ERLANG_INSTALL_PATH_PREFIX=/opt/erlang \
+    OPENSSL_INSTALL_PATH_PREFIX=/opt/tongsuo \
+    SSL_PREFIX=/opt/tongsuo \
+    SSL_KIND=tongsuo \
+    SSL_VERSION=${TONGSHUO_VERSION} \
+    GM_PLUGIN_AVAILABLE=true \
+    RABBITMQ_DATA_DIR=/var/lib/rabbitmq \
+    RABBITMQ_VERSION=${RABBITMQ_VERSION} \
+    RABBITMQ_HOME=/opt/rabbitmq \
+    HOME=/var/lib/rabbitmq \
+    LANG=C.UTF-8 \
+    LANGUAGE=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    RUNNING_UNDER_SYSTEMD=true \
+    RMQ_VERSION=${RMQ_VERSION}
+
+COPY scripts/baseline.env scripts/lib.sh scripts/configure-openeuler-repo.sh \
+     scripts/install-runtime-deps.sh scripts/prepare-image.sh /opt/rmq/scripts/
+RUN bash /opt/rmq/scripts/install-runtime-deps.sh
+
+COPY --from=gosu-builder /out/gosu /usr/local/bin/gosu
+COPY --from=tongsuo-builder /opt/tongsuo /opt/tongsuo
+COPY --from=erlang-builder /opt/erlang /opt/erlang
+COPY --from=rabbitmq-builder /opt/rabbitmq /opt/rabbitmq
+COPY --from=gm-plugin-builder /out/rabbitmq_gm-4.4.0 \
+     /opt/rabbitmq/plugins/rabbitmq_gm-4.4.0
+
+COPY distfiles/rabbitmqadmin-* /usr/local/bin/rabbitmqadmin
+COPY packaging/docker/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY packaging/rabbitmq/10-defaults.conf /opt/rmq/stage/10-defaults.conf
+COPY LICENSE THIRD_PARTY_NOTICES.md /usr/local/share/rmq/
+COPY licenses/ /usr/local/share/rmq/licenses/
+
+RUN chmod 0755 \
+        /usr/local/bin/gosu \
+        /usr/local/bin/rabbitmqadmin \
+        /usr/local/bin/docker-entrypoint.sh \
+    && bash /opt/rmq/scripts/prepare-image.sh
+
+VOLUME /var/lib/rabbitmq
+
+EXPOSE 4369 5671 5672 15671 15672 15691 15692 25672
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["rabbitmq-server"]

@@ -21,8 +21,9 @@ def metadata(
     source_url: str,
     source_sha256: str,
     description: str,
+    properties: dict[str, str] | None = None,
 ) -> dict:
-    return {
+    result = {
         "name": name,
         "version": version,
         "purl": purl,
@@ -31,6 +32,9 @@ def metadata(
         "source_sha256": source_sha256,
         "description": description,
     }
+    if properties:
+        result["properties"] = properties
+    return result
 
 
 def find_component(components: list[dict], name: str, purl_prefix: str) -> dict | None:
@@ -76,6 +80,8 @@ def upsert_component(
         "name": "rmq:source-archive-sha256",
         "value": info["source_sha256"],
     }
+    for key, value in info.get("properties", {}).items():
+        properties[key] = {"name": key, "value": value}
     component["properties"] = list(properties.values())
     return component
 
@@ -104,6 +110,38 @@ def main() -> int:
             "purl": image_purl,
         }
     )
+
+    ssl_kind = os.environ.get("SSL_KIND", "openssl")
+    if ssl_kind == "openssl":
+        ssl_component = metadata(
+            name="openssl",
+            version=env("OPENSSL_VERSION"),
+            purl=f"pkg:generic/openssl@{env('OPENSSL_VERSION')}",
+            license_value="Apache-2.0",
+            source_url=env("OPENSSL_URL"),
+            source_sha256=env("OPENSSL_SHA256"),
+            description="OpenSSL runtime and FIPS provider build",
+        )
+    elif ssl_kind == "tongsuo":
+        ssl_component = metadata(
+            name="tongsuo",
+            version=env("TONGSHUO_VERSION"),
+            purl=f"pkg:generic/tongsuo@{env('TONGSHUO_VERSION')}",
+            license_value="Apache-2.0",
+            source_url=env("TONGSHUO_SOURCE_URL"),
+            source_sha256=env("TONGSHUO_SHA256"),
+            description=(
+                "Tongsuo with NTLS/TLCP support, based on the OpenSSL "
+                f"{env('TONGSHUO_OPENSSL_VERSION')} source baseline"
+            ),
+            properties={
+                "rmq:openssl-source-baseline": env("TONGSHUO_OPENSSL_VERSION"),
+                "rmq:ntls-enabled": "true",
+                "rmq:cve-parity": "not-audited",
+            },
+        )
+    else:
+        raise RuntimeError(f"unsupported SSL_KIND: {ssl_kind}")
 
     inputs = [
         metadata(
@@ -136,15 +174,7 @@ def main() -> int:
             source_sha256=env("OTP_SHA256"),
             description="Erlang/OTP runtime",
         ),
-        metadata(
-            name="openssl",
-            version=env("OPENSSL_VERSION"),
-            purl=f"pkg:generic/openssl@{env('OPENSSL_VERSION')}",
-            license_value="Apache-2.0",
-            source_url=env("OPENSSL_URL"),
-            source_sha256=env("OPENSSL_SHA256"),
-            description="OpenSSL runtime and FIPS provider build",
-        ),
+        ssl_component,
         metadata(
             name="gosu",
             version=env("GOSU_VERSION"),

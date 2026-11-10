@@ -7,4 +7,5 @@
 /.ruff_cache/
 __pycache__/
 *.log
+*.dump
 .DS_Store

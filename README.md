@@ -4,7 +4,8 @@ RMQ 是一个独立维护的 openEuler RabbitMQ 4.4 management 容器发行版�
 项目基于 [RabbitMQ](https://www.rabbitmq.com/)，但**不是 RabbitMQ 官方镜像**，
 也不受 RabbitMQ 团队或 openEuler 社区的官方支持。
 
-首版只交付一个镜像：
+当前仓库包含一个已正式发布的标准变体和一个实验性 Tongsuo 变体。正式发布的标准
+镜像为：
 
 ```text
 ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
@@ -16,6 +17,17 @@ ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
 - Erlang/OTP `29.1.2`
 - OpenSSL `3.5.9`
 - 单节点验收，不宣称已验证集群或 Kubernetes Operator
+
+实验性变体不改变上面的正式 tag：
+
+```text
+rmq:4.4.0-rmq.1-tongsuo-openeuler
+```
+
+它使用 Tongsuo `8.5.0`，验证 SM2/SM3/SM4 能力，并通过 `rabbitmq_gm` 插件加密
+AMQP 0-9-1 消息 body。它**没有正式发布**，也**不宣称 TLCP/TLS+国密**；不要把
+实验 tag 当作稳定发布或合规证明。完整边界见
+[`docs/adr/0006-tongsuo-message-body-storage-encryption.md`](docs/adr/0006-tongsuo-message-body-storage-encryption.md)。
 
 ## 快速开始
 
@@ -41,6 +53,52 @@ docker run --detach \
 
 更完整的安全部署起点见
 [`examples/docker-compose/rmq-single`](examples/docker-compose/rmq-single/README.md)。
+
+## Tongsuo 实验变体
+
+Tongsuo 变体是独立构建，不覆盖标准 OpenSSL 镜像。它把 `/opt/openssl` 替换为
+`/opt/tongsuo`，重新编译 Erlang/OTP，并安装 `rabbitmq_gm` vendor plugin。
+
+构建与验收：
+
+```sh
+make fetch
+make build-tongsuo
+make smoke-tongsuo
+```
+
+`smoke-tongsuo` 会启动一个带 TLS 的临时容器，生成临时 key，验证：
+
+- Tongsuo 版本、SM2 密钥生成、SM3 摘要、SM4-GCM 往返和 NTLS cipher 构建信息；
+- AMQP 0-9-1 消息在持久化文件中不出现明文 marker；
+- 容器重启后仍能通过 TLS 消费并透明解密；
+- management/Prometheus 与标准 TLS 回归没有被 Tongsuo 破坏。
+
+运行时必须把 32 字节原始密钥或 64 位十六进制密钥挂载为
+`/etc/rabbitmq/gm.key`，或者用 `RMQ_GM_KEY_FILE` 指向其他路径。插件默认随
+Tongsuo 镜像启用；缺少有效密钥时启动应失败，不应静默降级为明文存储。
+
+```sh
+openssl rand -hex 32 > /tmp/rmq-gm.key
+chmod 600 /tmp/rmq-gm.key
+
+docker run --detach \
+  --name rmq-gm \
+  --hostname rmq-gm \
+  --env RABBITMQ_DEFAULT_USER=rmq-admin \
+  --env RABBITMQ_DEFAULT_PASS='replace-with-a-long-random-password' \
+  --env RMQ_GM_KEY_FILE=/etc/rabbitmq/gm.key \
+  --volume /tmp/rmq-gm.key:/etc/rabbitmq/gm.key:ro \
+  --publish 5672:5672 \
+  --publish 15672:15672 \
+  --publish 15692:15692 \
+  --volume rmq-gm-data:/var/lib/rabbitmq \
+  rmq:4.4.0-rmq.1-tongsuo-openeuler
+```
+
+这是**消息 body 的静态存储保护**，不是全盘加密。queue index、Mnesia、headers、
+消息属性、routing key 和磁盘上的密钥文件本身都不在插件加密范围内。当前没有
+多密钥热轮换、KMS 集成或密钥销毁流程。
 
 ## 与官方镜像的有意差异
 
@@ -69,7 +127,9 @@ RMQ 不内置 `HEALTHCHECK`，与官方镜像一致。Compose 示例提供外部
 - `CMD ["rabbitmq-server"]`
 - 端口 `4369`、`5671`、`5672`、`15671`、`15672`、`15691`、`15692`、`25672`
 
-入口脚本只负责官方镜像已有的降权和环境变量防护，不自动创建用户或修改 TLS 配置。
+入口脚本只负责官方镜像已有的降权、数据卷修复和环境变量防护；Tongsuo 变体还会把
+只读的 GM key 复制到 `/run/rmq` 并降权给 `rabbitmq`，不自动创建用户或修改 TLS
+配置。
 
 RabbitMQ 4.4 在只配置 `management.ssl.*` 时会进入 HTTPS-only 模式，不再启动
 15672 明文监听器。若需要同时保留 HTTP 与 HTTPS，须显式设置
@@ -97,6 +157,8 @@ make verify
 make fetch
 make build IMAGE=rmq:4.4.0-rmq.1-openeuler
 make smoke IMAGE=rmq:4.4.0-rmq.1-openeuler
+make build-tongsuo
+make smoke-tongsuo
 ```
 
 所有源码归档版本与 SHA256 集中在
@@ -120,7 +182,14 @@ openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level �
 - Erlang crypto 与 `/opt/openssl` 动态链接关系
 - management、Prometheus 插件和 `rabbitmqadmin`
 
-未覆盖：多节点集群、Kubernetes、滚动升级、国密/TLCP、FIPS 合规。
+标准变体未覆盖：多节点集群、Kubernetes、滚动升级、国密/TLCP、FIPS 合规。
+
+Tongsuo 变体额外覆盖：Tongsuo 动态链接、SM2/SM3/SM4-GCM 算法往返、
+`rabbitmq_gm` 插件启用、消息 body 静态加密、重启后解密消费。
+
+Tongsuo 变体仍未覆盖：TLCP/SM2 双证书握手、management TLCP、节点互连国密、
+集群、Kubernetes、多密钥轮换、KMS、全盘加密和 FIPS。标准 TLS/AMQPS/HTTPS
+回归通过不等于“TLS+国密”通过。
 
 ## 供应链验证
 
@@ -147,10 +216,21 @@ openEuler RPM 的 CVE；阻断范围实际是 Go、Python 等可识别的语言�
 
 ## 国密
 
-首版不实现也不宣称 TLCP/国密套件。RabbitMQ 的 TLS 主要在 Erlang/OTP
-`ssl` 层完成，单纯把 OpenSSL 换成 Tongsuo 不能证明原生 TLCP 可用。后续必须分别
-验证 AMQP、management HTTPS 和节点互连后，才能新增国密变体。详见
-[`docs/adr/0003-defer-national-cryptography.md`](docs/adr/0003-defer-national-cryptography.md)。
+标准变体不实现也不宣称 TLCP/国密套件。Tongsuo 变体验证的是 Tongsuo 动态链接、
+SM2/SM3/SM4 算法和 AMQP 0-9-1 消息 body 的 SM4-GCM 存储加密，不等于 TLCP。
+RabbitMQ 的 TLS 主要在 Erlang/OTP `ssl` 层完成；OTP `29.1.2` 没有 TLCP/NTLS
+握手分支，单纯替换 OpenSSL 不会让 AMQP 或 management listener 自动支持国密
+双证书。详见
+[`docs/adr/0003-defer-national-cryptography.md`](docs/adr/0003-defer-national-cryptography.md)
+和
+[`docs/adr/0006-tongsuo-message-body-storage-encryption.md`](docs/adr/0006-tongsuo-message-body-storage-encryption.md)。
+
+如果后续需要 TLCP，必须单独实现并验证 OTP/native helper 或 fork 的握手路径，
+或者明确部署外部 Tongsuo TLCP 终止代理；不能仅凭本仓库的存储加密 smoke test
+宣称传输层国密支持。Tongsuo `8.5.0` 基于 OpenSSL `3.5.4`，其 CVE 状态与标准
+变体的 OpenSSL `3.5.9` **未审计等价**。
+
+术语见 [`GLOSSARY.md`](GLOSSARY.md)。
 
 ## 许可证
 

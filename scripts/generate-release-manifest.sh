@@ -17,6 +17,19 @@ source_baseline
 output="${OUTPUT:-release-manifest.json}"
 version="$(tr -d ' \n' < "$ROOT_DIR/VERSION")"
 upstream="${version%%-*}"
+ssl_kind="${SSL_KIND:-openssl}"
+
+case "$ssl_kind" in
+    openssl)
+        variant_suffix="openeuler"
+        ;;
+    tongsuo)
+        variant_suffix="tongsuo-openeuler"
+        ;;
+    *)
+        die "unsupported SSL_KIND: $ssl_kind"
+        ;;
+esac
 
 [[ "$IMAGE_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]] \
     || die "IMAGE_DIGEST is invalid: $IMAGE_DIGEST"
@@ -29,6 +42,8 @@ jq -n \
     --arg project "RMQ" \
     --arg version "$version" \
     --arg upstream "$upstream" \
+    --arg sslKind "$ssl_kind" \
+    --arg variantSuffix "$variant_suffix" \
     --arg repo "$IMAGE_REPO" \
     --arg digest "$IMAGE_DIGEST" \
     --arg sourceCommit "$SOURCE_COMMIT" \
@@ -42,6 +57,9 @@ jq -n \
     --arg otpSha "$OTP_SHA256" \
     --arg opensslVersion "$OPENSSL_VERSION" \
     --arg opensslSha "$OPENSSL_SHA256" \
+    --arg tongsuoVersion "$TONGSHUO_VERSION" \
+    --arg tongsuoSha "$TONGSHUO_SHA256" \
+    --arg tongsuoOpensslVersion "$TONGSHUO_OPENSSL_VERSION" \
     --arg gosuVersion "$GOSU_VERSION" \
     --arg gosuSha "$GOSU_SOURCE_SHA256" \
     --arg adminVersion "$RABBITMQADMIN_VERSION" \
@@ -62,7 +80,7 @@ jq -n \
       },
       image: {
         repository: $repo,
-        immutableTag: ($version + "-openeuler"),
+        immutableTag: ($version + "-" + $variantSuffix),
         digest: $digest,
         platform: "linux/amd64"
       },
@@ -70,14 +88,27 @@ jq -n \
         image: $baseImage,
         digest: $baseDigest
       },
-      components: {
-        rabbitmq: { version: $rabbitmqVersion, archiveSha256: $rabbitmqSha },
-        erlangOtp: { version: $otpVersion, archiveSha256: $otpSha },
-        openssl: { version: $opensslVersion, archiveSha256: $opensslSha },
-        gosu: { version: $gosuVersion, archiveSha256: $gosuSha },
-        rabbitmqadmin: { version: $adminVersion, archiveSha256: $adminSha }
-      },
-      tests: {
+      components: (
+        if $sslKind == "tongsuo" then {
+          rabbitmq: { version: $rabbitmqVersion, archiveSha256: $rabbitmqSha },
+          erlangOtp: { version: $otpVersion, archiveSha256: $otpSha },
+          tongsuo: {
+            version: $tongsuoVersion,
+            archiveSha256: $tongsuoSha,
+            opensslSourceBaseline: $tongsuoOpensslVersion,
+            cveParityWithStandardOpenSSL: "not-audited"
+          },
+          gosu: { version: $gosuVersion, archiveSha256: $gosuSha },
+          rabbitmqadmin: { version: $adminVersion, archiveSha256: $adminSha }
+        } else {
+          rabbitmq: { version: $rabbitmqVersion, archiveSha256: $rabbitmqSha },
+          erlangOtp: { version: $otpVersion, archiveSha256: $otpSha },
+          openssl: { version: $opensslVersion, archiveSha256: $opensslSha },
+          gosu: { version: $gosuVersion, archiveSha256: $gosuSha },
+          rabbitmqadmin: { version: $adminVersion, archiveSha256: $adminSha }
+        } end
+      ),
+      tests: ({
         singleNode: "passed",
         amqp: "passed",
         amqps: "passed",
@@ -86,7 +117,9 @@ jq -n \
         prometheus: "passed",
         persistenceAfterRestart: "passed",
         guestLoopbackOnly: "passed"
-      },
+      } + (if $sslKind == "tongsuo" then {
+        gmMessageBodyStorage: "passed"
+      } else {} end)),
       artifacts: {
         sbomCycloneDx: $sbom,
         trivySarif: $trivySarif,
@@ -99,14 +132,17 @@ jq -n \
         cosignKeylessSigned: true,
         sbomAttestation: true
       },
-      deviations: {
+      deviations: ({
         guestLoopbackOnly: true,
         builtInHealthcheck: false
-      },
+      } + (if $sslKind == "tongsuo" then {
+        messageBodyStorageEncryption: true
+      } else {} end)),
       claims: {
         officialRabbitmqImage: false,
         rabbitmqVendorSupport: false,
-        nationalCryptography: false,
+        nationalCryptographyTls: false,
+        nationalCryptographyStorage: ($sslKind == "tongsuo"),
         fipsCompliance: false,
         clusterTested: false,
         kubernetesTested: false

@@ -50,6 +50,8 @@ download "gosu-${GOSU_VERSION}.tar.gz" \
     "$GOSU_SOURCE_URL" "$GOSU_SOURCE_SHA256"
 download "openssl-${OPENSSL_VERSION}.tar.gz" \
     "$OPENSSL_URL" "$OPENSSL_SHA256"
+download "tongsuo-${TONGSHUO_VERSION}.tar.gz" \
+    "$TONGSHUO_SOURCE_URL" "$TONGSHUO_SHA256"
 download "otp_src_${OTP_VERSION}.tar.gz" \
     "$OTP_URL" "$OTP_SHA256"
 download "rabbitmq-server-generic-unix-${RABBITMQ_VERSION}.tar.xz" \

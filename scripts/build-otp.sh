@@ -14,7 +14,7 @@ archive="$DISTFILES_DIR/otp_src_${OTP_VERSION}.tar.gz"
 verify_sha256 "$archive" "$OTP_SHA256"
 
 prefix="/opt/erlang"
-openssl_prefix="/opt/openssl"
+openssl_prefix="${SSL_PREFIX:-/opt/openssl}"
 source_dir="/tmp/rmq-otp-${OTP_VERSION}"
 
 rm -rf "$source_dir" "$prefix"

@@ -12,7 +12,6 @@ import pika
 
 
 QUEUE = "rmq.persistence"
-MESSAGE = b"rmq-persistence-check"
 
 
 def env(name: str, default: str | None = None) -> str:
@@ -20,6 +19,10 @@ def env(name: str, default: str | None = None) -> str:
     if value is None:
         raise RuntimeError(f"missing environment variable: {name}")
     return value
+
+
+def message() -> bytes:
+    return env("AMQP_BODY", "rmq-persistence-check").encode()
 
 
 def connection(retries: int = 30) -> pika.BlockingConnection:
@@ -62,7 +65,7 @@ def publish() -> None:
         channel.basic_publish(
             exchange="",
             routing_key=QUEUE,
-            body=MESSAGE,
+            body=message(),
             properties=pika.BasicProperties(
                 delivery_mode=2,
                 content_type="text/plain",
@@ -77,7 +80,7 @@ def consume() -> None:
         method, properties, body = channel.basic_get(queue=QUEUE, auto_ack=False)
         if method is None:
             raise RuntimeError(f"no message returned from {QUEUE}")
-        if body != MESSAGE:
+        if body != message():
             raise RuntimeError(f"unexpected message body: {body!r}")
         if properties.delivery_mode != 2:
             raise RuntimeError("message was not published as persistent")

@@ -138,3 +138,101 @@ jobs:
           path: artifacts/
           retention-days: 30
           if-no-files-found: warn
+
+  tongsuo:
+    name: Build and verify Tongsuo image
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.build_image)
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - id: ver
+        name: Read project version
+        run: echo "version=$(tr -d ' \n' < VERSION)" >> "$GITHUB_OUTPUT"
+      - id: pins
+        name: Read immutable build arguments
+        run: |
+          {
+            echo 'args<<EOF'
+            bash scripts/print-build-args.sh
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: actions/cache@v4
+        with:
+          path: distfiles
+          key: rmq-sources-${{ runner.os }}-${{ hashFiles('scripts/baseline.env') }}
+      - run: make fetch
+      - name: Build linux/amd64 Tongsuo image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: packaging/docker/Dockerfile.tongsuo
+          target: rmq-tongsuo-final
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: rmq:${{ steps.ver.outputs.version }}-tongsuo-openeuler-ci
+          build-args: ${{ steps.pins.outputs.args }}
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=rmq-tongsuo
+          cache-to: type=gha,mode=max,ignore-error=true,scope=rmq-tongsuo
+      - name: Tongsuo acceptance tests
+        run: |
+          SSL_PREFIX=/opt/tongsuo \
+          SSL_KIND=tongsuo \
+          SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
+          SSL_LICENSE_NAME=tongsuo \
+          GM_STORAGE=1 \
+          EXPECTED_VARIANT=tongsuo-openeuler \
+            bash scripts/smoke-docker.sh \
+              "rmq:${{ steps.ver.outputs.version }}-tongsuo-openeuler-ci"
+      - name: Install supply-chain tools
+        run: bash scripts/install-security-tools.sh syft trivy
+      - name: Generate CycloneDX SBOM
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          syft scan \
+            "docker:rmq:${{ steps.ver.outputs.version }}-tongsuo-openeuler-ci" \
+            --output cyclonedx-json \
+            > "artifacts/rmq-${{ steps.ver.outputs.version }}-tongsuo-openeuler.cyclonedx.json"
+      - name: Enrich CycloneDX SBOM with RMQ build inputs
+        env:
+          IMAGE_VERSION: ${{ steps.ver.outputs.version }}-tongsuo-openeuler
+          SSL_KIND: tongsuo
+        run: |
+          bash scripts/enrich-sbom.sh \
+            "artifacts/rmq-${{ steps.ver.outputs.version }}-tongsuo-openeuler.cyclonedx.json"
+      - name: Blocking Trivy scan
+        run: |
+          set -euo pipefail
+          IMAGE="rmq:${{ steps.ver.outputs.version }}-tongsuo-openeuler-ci"
+          set +e
+          trivy image \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --format sarif \
+            --output artifacts/trivy-tongsuo-openeuler.sarif \
+            "$IMAGE"
+          rc=$?
+          trivy image \
+            --scanners vuln,secret \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            --format table \
+            "$IMAGE" > artifacts/trivy-tongsuo-openeuler.txt 2>&1 || true
+          exit "$rc"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: rmq-tongsuo-build-artifacts
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: warn

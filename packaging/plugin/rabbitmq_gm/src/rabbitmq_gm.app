@@ -1,0 +1,10 @@
+{application, rabbitmq_gm,
+ [{description, "RMQ SM4-GCM message body storage encryption"},
+  {vsn, "4.4.0"},
+  {modules, [rabbitmq_gm_app,
+             rabbitmq_gm_crypto,
+             rabbitmq_gm_msg_interceptor]},
+  {registered, []},
+  {applications, [kernel, stdlib, crypto, rabbit_common, rabbit]},
+  {mod, {rabbitmq_gm_app, []}},
+  {env, []}]}.
