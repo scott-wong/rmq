@@ -173,13 +173,16 @@ wait_for_rabbitmq
     exit 0
 '
 
+printf 'smoke: static checks passed\n'
 test "$("$DOCKER" exec "$CONTAINER" ps -o user= -p 1 | xargs)" = "rabbitmq"
+printf 'smoke: process user check passed\n'
 
 # shellcheck disable=SC2016
 "$DOCKER" exec -e SSL_PREFIX="$SSL_PREFIX" "$CONTAINER" bash -c '
     find /opt/erlang -type f -name crypto.so -exec ldd {} \; \
         | awk -v prefix="$SSL_PREFIX" "/libcrypto.so/ { if (!index(\$0, prefix \"/lib\")) exit 1 }"
 '
+printf 'smoke: Tongsuo linkage check passed\n'
 
 test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.User}}')" = ""
 test "$("$DOCKER" inspect "$CONTAINER" --format '{{json .Config.Healthcheck}}')" = "null"
@@ -191,12 +194,15 @@ if [ "$GM_STORAGE" = "1" ]; then
     test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" = "true"
     test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.tls"}}')" = "false"
 fi
+printf 'smoke: image metadata checks passed\n'
 
 "$DOCKER" exec "$CONTAINER" grep -q 'openEuler 24.03 (LTS-SP4)' /etc/os-release
+printf 'smoke: OS check passed\n'
 
 if [ "$GM_STORAGE" = "1" ]; then
     GM_BODY="rmq-gm-storage-marker-$RANDOM"
     run_client publish -e AMQP_BODY="$GM_BODY"
+    printf 'smoke: GM publish passed\n'
     sleep 2
     if "$DOCKER" exec "$CONTAINER" \
         grep -R -a -l "$GM_BODY" /var/lib/rabbitmq/mnesia >/dev/null; then
@@ -204,9 +210,11 @@ if [ "$GM_STORAGE" = "1" ]; then
     fi
 else
     run_client publish
+    printf 'smoke: standard publish passed\n'
 fi
 "$DOCKER" restart "$CONTAINER" >/dev/null
 wait_for_rabbitmq
+printf 'smoke: restart passed\n'
 if [ "$GM_STORAGE" = "1" ]; then
     run_client consume \
         -e AMQP_BODY="$GM_BODY" \
@@ -217,6 +225,8 @@ else
         -e AMQP_PORT=5671 \
         -e AMQP_TLS=1
 fi
+printf 'smoke: TLS consume passed\n'
 run_client http-checks
+printf 'smoke: management and metrics checks passed\n'
 
 printf 'RMQ smoke test passed for %s\n' "$IMAGE"
