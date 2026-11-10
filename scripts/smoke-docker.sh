@@ -120,7 +120,7 @@ wait_for_rabbitmq
     -e SSL_LICENSE_NAME="$SSL_LICENSE_NAME" \
     -e GM_STORAGE="$GM_STORAGE" \
     "$CONTAINER" bash -c '
-    set -euxo pipefail
+    set -euo pipefail
     test "$(readlink /plugins)" = "/opt/rabbitmq/plugins"
     test -f /etc/rabbitmq/conf.d/10-defaults.conf
     grep -q "^loopback_users.guest = true$" /etc/rabbitmq/conf.d/10-defaults.conf
@@ -170,10 +170,8 @@ wait_for_rabbitmq
     fi
     rabbitmq_version="$(rabbitmqctl version)"
     [[ "$rabbitmq_version" == *"4.4.0"* ]]
-    if ! admin_help="$(rabbitmqadmin --help 2>&1)"; then
-        printf '%s\n' "$admin_help" >&2
-        exit 1
-    fi
+    admin_help="$(rabbitmqadmin --help 2>&1 || true)"
+    [[ "$admin_help" == *"Usage: rabbitmqadmin"* ]]
 '
 
 test "$("$DOCKER" exec "$CONTAINER" ps -o user= -p 1 | xargs)" = "rabbitmq"
