@@ -4,32 +4,40 @@ RMQ 是一个独立维护的 openEuler RabbitMQ 4.4 management 容器发行版�
 项目基于 [RabbitMQ](https://www.rabbitmq.com/)，但**不是 RabbitMQ 官方镜像**，
 也不受 RabbitMQ 团队或 openEuler 社区的官方支持。
 
-当前仓库包含一个已正式发布的标准变体和一个实验性 Tongsuo 变体。正式发布的标准
-镜像为：
+默认镜像是 **Tongsuo 变体**，使用 `rabbitmq_gm` 对消息 body 做 SM4-GCM
+静态存储加密：
+
+```text
+ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+```
+
+- `linux/amd64`
+- openEuler `24.03 LTS SP4`
+- RabbitMQ `4.4.0` management、Prometheus 和 AMQP 1.0 支持
+- Erlang/OTP `29.1.2`
+- Tongsuo `8.5.0`（OpenSSL `3.5.4` 源码基线）
+- gosu `1.20`、rabbitmqadmin `2.35.0`
+- 单节点验收；不宣称已验证集群、Kubernetes Operator 或 TLCP
+
+已经发布的 `v4.4.0-rmq.1` 标准 OpenSSL 镜像保持不变：
 
 ```text
 ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
 ```
 
-- `linux/amd64`
-- openEuler `24.03 LTS SP4`
-- RabbitMQ `4.4.0` management + Prometheus plugins
-- Erlang/OTP `29.1.2`
-- OpenSSL `3.5.9`
-- 单节点验收，不宣称已验证集群或 Kubernetes Operator
-
-实验性变体不改变上面的正式 tag：
-
-```text
-rmq:4.4.0-rmq.1-tongsuo-openeuler
-```
-
-它使用 Tongsuo `8.5.0`，验证 SM2/SM3/SM4 能力，并通过 `rabbitmq_gm` 插件加密
-AMQP 0-9-1 消息 body。它**没有正式发布**，也**不宣称 TLCP/TLS+国密**；不要把
-实验 tag 当作稳定发布或合规证明。完整边界见
-[`docs/adr/0006-tongsuo-message-body-storage-encryption.md`](docs/adr/0006-tongsuo-message-body-storage-encryption.md)。
+标准 Dockerfile 仍保留在仓库中，用于复现该历史版本；默认 CI、默认 Makefile
+目标和后续发布都构建 Tongsuo 版本，不再默认构建标准版本。
 
 ## 快速开始
+
+先创建 32 字节原始密钥（也支持 64 位十六进制）：
+
+```sh
+openssl rand -hex 32 > rmq-gm.key
+chmod 600 rmq-gm.key
+```
+
+启动默认镜像：
 
 ```sh
 docker run --detach \
@@ -37,15 +45,17 @@ docker run --detach \
   --name rmq-single \
   --env RABBITMQ_DEFAULT_USER=rmq-admin \
   --env RABBITMQ_DEFAULT_PASS='replace-with-a-long-random-password' \
+  --mount type=bind,src="$PWD/rmq-gm.key",dst=/etc/rabbitmq/gm.key,readonly \
   --publish 5672:5672 \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
 ```
 
 管理界面为 `http://127.0.0.1:15672/`，Prometheus 指标为
-`http://127.0.0.1:15692/metrics`。
+`http://127.0.0.1:15692/metrics`。AMQP 1.0 客户端可以连接同一 `5672` 端口；
+标准 TLS 使用 `5671`。
 
 `RABBITMQ_DEFAULT_*` 环境变量适合开发、CI 和首次启动示例；上游文档明确不建议
 把它作为生产用户管理方案。生产部署应通过受控的 `rabbitmq.conf`、definitions
@@ -54,51 +64,59 @@ docker run --detach \
 更完整的安全部署起点见
 [`examples/docker-compose/rmq-single`](examples/docker-compose/rmq-single/README.md)。
 
-## Tongsuo 实验变体
+## Tongsuo 与消息体加密
 
-Tongsuo 变体是独立构建，不覆盖标准 OpenSSL 镜像。它把 `/opt/openssl` 替换为
-`/opt/tongsuo`，重新编译 Erlang/OTP，并安装 `rabbitmq_gm` vendor plugin。
+Tongsuo 变体把 `/opt/openssl` 替换为 `/opt/tongsuo`，重新编译 Erlang/OTP，
+并安装 `rabbitmq_gm` vendor plugin。插件默认启用；缺少有效密钥时容器启动失败，
+不会静默降级为明文存储。
 
 构建与验收：
 
 ```sh
 make fetch
-make build-tongsuo
-make smoke-tongsuo
+make build
+make smoke
 ```
 
-`smoke-tongsuo` 会启动一个带 TLS 的临时容器，生成临时 key，验证：
+`make smoke` 启动一个带标准 TLS 的临时容器，生成临时 key，验证：
 
 - Tongsuo 版本、SM2 密钥生成、SM3 摘要、SM4-GCM 往返和 NTLS cipher 构建信息；
 - AMQP 0-9-1 消息在持久化文件中不出现明文 marker；
-- 容器重启后仍能通过 TLS 消费并透明解密；
+- AMQP 1.0 的 `data`、`amqp-value` 和 `amqp-sequence` body 均不出现明文 marker；
+- 容器重启后仍能通过 TLS 消费，并恢复原始 AMQP 1.0 body 类型；
 - management/Prometheus 与标准 TLS 回归没有被 Tongsuo 破坏。
 
+AMQP 1.0 支持由镜像启用 `rabbitmq_amqp1_0` 插件提供。插件对 AMQP 1.0 的 body
+section 先加密打包，再以单条 `data` section 存储；读取时通过 broker-owned
+annotation 还原原始 section 和 descriptor code。AMQP 1.0 的 headers、properties、
+application properties、message annotations、footer、routing key 和 queue index
+不在加密范围内。
+
+对于不认识的 AMQP 1.0 body 布局，插件在写入队列前拒绝该消息，而不是静默写入
+明文。当前没有多密钥热轮换、KMS 集成或密钥销毁流程。
+
 运行时必须把 32 字节原始密钥或 64 位十六进制密钥挂载为
-`/etc/rabbitmq/gm.key`，或者用 `RMQ_GM_KEY_FILE` 指向其他路径。插件默认随
-Tongsuo 镜像启用；缺少有效密钥时启动应失败，不应静默降级为明文存储。
+`/etc/rabbitmq/gm.key`，或者用 `RMQ_GM_KEY_FILE` 指向其他路径。入口脚本只把
+只读密钥复制到 `/run/rmq` 并交给 `rabbitmq` 用户，broker 进程本身不以 root
+运行。
 
 ```sh
-openssl rand -hex 32 > /tmp/rmq-gm.key
-chmod 600 /tmp/rmq-gm.key
-
 docker run --detach \
   --name rmq-gm \
   --hostname rmq-gm \
   --env RABBITMQ_DEFAULT_USER=rmq-admin \
   --env RABBITMQ_DEFAULT_PASS='replace-with-a-long-random-password' \
   --env RMQ_GM_KEY_FILE=/etc/rabbitmq/gm.key \
-  --volume /tmp/rmq-gm.key:/etc/rabbitmq/gm.key:ro \
+  --mount type=bind,src="$PWD/rmq-gm.key",dst=/etc/rabbitmq/gm.key,readonly \
   --publish 5672:5672 \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-gm-data:/var/lib/rabbitmq \
-  rmq:4.4.0-rmq.1-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
 ```
 
 这是**消息 body 的静态存储保护**，不是全盘加密。queue index、Mnesia、headers、
-消息属性、routing key 和磁盘上的密钥文件本身都不在插件加密范围内。当前没有
-多密钥热轮换、KMS 集成或密钥销毁流程。
+消息属性、routing key 和磁盘上的密钥文件本身都不在插件加密范围内。
 
 ## 与官方镜像的有意差异
 
@@ -127,7 +145,7 @@ RMQ 不内置 `HEALTHCHECK`，与官方镜像一致。Compose 示例提供外部
 - `CMD ["rabbitmq-server"]`
 - 端口 `4369`、`5671`、`5672`、`15671`、`15672`、`15691`、`15692`、`25672`
 
-入口脚本只负责官方镜像已有的降权、数据卷修复和环境变量防护；Tongsuo 变体还会把
+入口脚本只负责官方镜像已有的降权、数据卷修复和环境变量防护；Tongsuo 版本还会把
 只读的 GM key 复制到 `/run/rmq` 并降权给 `rabbitmq`，不自动创建用户或修改 TLS
 配置。
 
@@ -137,16 +155,16 @@ RabbitMQ 4.4 在只配置 `management.ssl.*` 时会进入 HTTPS-only 模式，�
 
 ## 版本与标签
 
-`VERSION` 是唯一版本事实源，格式为 `<上游版本>-rmq.<修订号>`。一个正式版本发布：
+`VERSION` 是唯一版本事实源，格式为 `<上游版本>-rmq.<修订号>`。当前版本线：
 
 ```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler   # 不可移动的完整版本
-ghcr.io/scott-wong/rmq:4.4.0-openeuler         # 上游线别名
-ghcr.io/scott-wong/rmq:latest-openeuler        # 浮动别名
+ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler  # 不可移动的完整版本
+ghcr.io/scott-wong/rmq:4.4.0-tongsuo-openeuler         # 上游线别名
+ghcr.io/scott-wong/rmq:latest-tongsuo-openeuler        # 浮动别名
 ```
 
-同一上游版本需要安全重建时 bump `rmq.N`；不覆盖完整版本标签，不提供全局
-`4.4.0` 或 `latest`。
+已经发布的 `4.4.0-rmq.1-openeuler` 不会移动。同一上游版本需要安全重建时 bump
+`rmq.N`；不覆盖完整版本标签，也不把 Tongsuo 镜像伪装成标准 OpenSSL 变体。
 
 ## 构建
 
@@ -155,15 +173,20 @@ ghcr.io/scott-wong/rmq:latest-openeuler        # 浮动别名
 ```sh
 make verify
 make fetch
-make build IMAGE=rmq:4.4.0-rmq.1-openeuler
-make smoke IMAGE=rmq:4.4.0-rmq.1-openeuler
-make build-tongsuo
-make smoke-tongsuo
+make build
+make smoke
+```
+
+历史标准 OpenSSL 变体仍可用以下命令构建和冒烟，但它不再是默认目标：
+
+```sh
+make build-standard
+make smoke-standard
 ```
 
 所有源码归档版本与 SHA256 集中在
-[`scripts/baseline.env`](scripts/baseline.env)。最终镜像不包含编译器、头文件、
-源码包或测试依赖。
+[`scripts/baseline.env`](scripts/baseline.env)。最终镜像不包含头文件、源码包、
+C 编译器（gcc 或 make）或测试依赖。
 
 openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level 由签名仓库在
 构建时解析，并先应用 `dnf upgrade --security`；因此不同日期重建同一 git commit
@@ -175,21 +198,17 @@ openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level �
 冒烟测试覆盖：
 
 - openEuler 24.03 SP4、amd64、UID/GID 和数据目录权限
-- AMQP 发布/消费，以及重启后的持久消息恢复
+- AMQP 0-9-1 发布/消费，以及重启后的持久消息恢复
+- AMQP 1.0 `data`、`amqp-value`、`amqp-sequence` 发布/消费，以及重启后的恢复
 - 标准 AMQPS 与 management HTTPS
 - management HTTP/HTTPS API、UI 与 Prometheus 指标
 - guest 远端访问被拒绝
-- Erlang crypto 与 `/opt/openssl` 动态链接关系
-- management、Prometheus 插件和 `rabbitmqadmin`
+- Erlang crypto 与 `/opt/tongsuo` 动态链接关系
+- AMQP 1.0 插件、management、Prometheus 和 `rabbitmqadmin`
 
-标准变体未覆盖：多节点集群、Kubernetes、滚动升级、国密/TLCP、FIPS 合规。
-
-Tongsuo 变体额外覆盖：Tongsuo 动态链接、SM2/SM3/SM4-GCM 算法往返、
-`rabbitmq_gm` 插件启用、消息 body 静态加密、重启后解密消费。
-
-Tongsuo 变体仍未覆盖：TLCP/SM2 双证书握手、management TLCP、节点互连国密、
-集群、Kubernetes、多密钥轮换、KMS、全盘加密和 FIPS。标准 TLS/AMQPS/HTTPS
-回归通过不等于“TLS+国密”通过。
+未覆盖：TLCP/SM2 双证书握手、management TLCP、节点互连国密、多节点集群、
+Kubernetes、滚动升级、多密钥轮换、KMS、全盘加密和 FIPS 合规。标准 TLS/AMQPS/
+HTTPS 回归通过不等于“TLS+国密”通过。
 
 ## 供应链验证
 
@@ -202,10 +221,10 @@ attestation。
 ```sh
 cosign verify \
   --certificate-identity \
-    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.1' \
+    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.2' \
   --certificate-oidc-issuer \
     'https://token.actions.githubusercontent.com' \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
 ```
 
 Trivy 阻断 `HIGH`/`CRITICAL` 中已有修复版本的漏洞与 secret 命中；未修复漏洞仍会
@@ -214,16 +233,17 @@ openEuler RPM 的 CVE；阻断范围实际是 Go、Python 等可识别的语言�
 工作流另附非阻断的 `dnf updateinfo --security` 证据，但它不能替代 openEuler
 漏洞数据库。因此 RMQ 不宣称“零漏洞”或“已完成 openEuler 全量安全审计”。
 
-## 国密
+## 国密边界
 
-标准变体不实现也不宣称 TLCP/国密套件。Tongsuo 变体验证的是 Tongsuo 动态链接、
-SM2/SM3/SM4 算法和 AMQP 0-9-1 消息 body 的 SM4-GCM 存储加密，不等于 TLCP。
+Tongsuo 版本验证的是 Tongsuo 动态链接、SM2/SM3/SM4 算法和
+AMQP 0-9-1/AMQP 1.0 消息 body 的 SM4-GCM 存储加密，不等于 TLCP。
 RabbitMQ 的 TLS 主要在 Erlang/OTP `ssl` 层完成；OTP `29.1.2` 没有 TLCP/NTLS
 握手分支，单纯替换 OpenSSL 不会让 AMQP 或 management listener 自动支持国密
 双证书。详见
-[`docs/adr/0003-defer-national-cryptography.md`](docs/adr/0003-defer-national-cryptography.md)
+[`docs/adr/0003-defer-national-cryptography.md`](docs/adr/0003-defer-national-cryptography.md)、
+[`docs/adr/0006-tongsuo-message-body-storage-encryption.md`](docs/adr/0006-tongsuo-message-body-storage-encryption.md)
 和
-[`docs/adr/0006-tongsuo-message-body-storage-encryption.md`](docs/adr/0006-tongsuo-message-body-storage-encryption.md)。
+[`docs/adr/0007-default-tongsuo-and-amqp10.md`](docs/adr/0007-default-tongsuo-and-amqp10.md)。
 
 如果后续需要 TLCP，必须单独实现并验证 OTP/native helper 或 fork 的握手路径，
 或者明确部署外部 Tongsuo TLCP 终止代理；不能仅凭本仓库的存储加密 smoke test

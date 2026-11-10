@@ -1,10 +1,11 @@
 # 首版不实现国密/TLCP
 
 > Status: partially superseded by
-> [ADR 0006](0006-tongsuo-message-body-storage-encryption.md). The standard
+> [ADR 0006](0006-tongsuo-message-body-storage-encryption.md) and
+> [ADR 0007](0007-default-tongsuo-and-amqp10.md). The standard
 > `v4.4.0-rmq.1` release remains OpenSSL-based and makes no national
-> cryptography claim. The experimental Tongsuo variant implements only AMQP
-> 0-9-1 message-body storage encryption; it still does not claim TLCP or
+> cryptography claim. The Tongsuo default variant implements AMQP 0-9-1 and
+> AMQP 1.0 message-body storage encryption; it still does not claim TLCP or
 > TLS+national cryptography.
 
 RabbitMQ 的 TLS 行为主要经过 Erlang/OTP `ssl`，而不是直接暴露 OpenSSL

@@ -5,6 +5,6 @@
              rabbitmq_gm_crypto,
              rabbitmq_gm_msg_interceptor]},
   {registered, []},
-  {applications, [kernel, stdlib, crypto, rabbit_common, rabbit]},
+  {applications, [kernel, stdlib, crypto, amqp10_common, rabbit_common, rabbit]},
   {mod, {rabbitmq_gm_app, []}},
   {env, []}]}.

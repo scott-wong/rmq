@@ -82,16 +82,16 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: packaging/docker/Dockerfile
-          target: rmq-final
+          file: packaging/docker/Dockerfile.tongsuo
+          target: rmq-tongsuo-final
           platforms: linux/amd64
           push: true
-          tags: ${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate
+          tags: ${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate
           build-args: ${{ needs.validate.outputs.build_args }}
           provenance: false
           sbom: false
-          cache-from: type=gha,scope=rmq-openeuler
-          cache-to: type=gha,mode=max,ignore-error=true,scope=rmq-openeuler
+          cache-from: type=gha,scope=rmq-tongsuo
+          cache-to: type=gha,mode=max,ignore-error=true,scope=rmq-tongsuo
 
   verify:
     name: Verify candidate
@@ -113,11 +113,17 @@ jobs:
       - name: Pull candidate
         run: |
           docker pull \
-            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
       - name: Candidate acceptance tests
         run: |
-          bash scripts/smoke-docker.sh \
-            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+          SSL_PREFIX=/opt/tongsuo \
+          SSL_KIND=tongsuo \
+          SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
+          SSL_LICENSE_NAME=tongsuo \
+          GM_STORAGE=1 \
+          EXPECTED_VARIANT=tongsuo-openeuler \
+            bash scripts/smoke-docker.sh \
+              "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
 
   supply-chain:
     name: Scan candidate
@@ -140,24 +146,25 @@ jobs:
       - name: Pull candidate
         run: |
           docker pull \
-            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+            "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
       - name: Generate CycloneDX SBOM
         run: |
           set -euo pipefail
           mkdir -p artifacts
-          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
           syft scan "docker:${REF}" --output cyclonedx-json \
-            > "artifacts/rmq-${{ needs.validate.outputs.version }}-openeuler.cyclonedx.json"
+            > "artifacts/rmq-${{ needs.validate.outputs.version }}-tongsuo-openeuler.cyclonedx.json"
       - name: Enrich CycloneDX SBOM with RMQ build inputs
         env:
-          IMAGE_VERSION: ${{ needs.validate.outputs.version }}-openeuler
+          IMAGE_VERSION: ${{ needs.validate.outputs.version }}-tongsuo-openeuler
+          SSL_KIND: tongsuo
         run: |
           bash scripts/enrich-sbom.sh \
-            "artifacts/rmq-${{ needs.validate.outputs.version }}-openeuler.cyclonedx.json"
+            "artifacts/rmq-${{ needs.validate.outputs.version }}-tongsuo-openeuler.cyclonedx.json"
       - name: Blocking Trivy scan
         run: |
           set -euo pipefail
-          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler-candidate"
+          REF="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
           set +e
           trivy image \
             --scanners vuln,secret \
@@ -165,7 +172,7 @@ jobs:
             --ignore-unfixed \
             --exit-code 1 \
             --format sarif \
-            --output artifacts/trivy-openeuler.sarif \
+            --output artifacts/trivy-tongsuo-openeuler.sarif \
             "$REF"
           rc=$?
           trivy image \
@@ -173,7 +180,7 @@ jobs:
             --severity HIGH,CRITICAL \
             --exit-code 0 \
             --format table \
-            "$REF" > artifacts/trivy-openeuler.txt 2>&1 || true
+            "$REF" > artifacts/trivy-tongsuo-openeuler.txt 2>&1 || true
           exit "$rc"
       - uses: actions/upload-artifact@v4
         if: always()
@@ -216,7 +223,7 @@ jobs:
           VERSION: ${{ needs.validate.outputs.version }}
         run: |
           set -euo pipefail
-          CANDIDATE="${REPO}:${VERSION}-openeuler-candidate"
+          CANDIDATE="${REPO}:${VERSION}-tongsuo-openeuler-candidate"
           DIGEST="$(crane digest "$CANDIDATE")"
           [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           ARCH="$(crane config "${REPO}@${DIGEST}" | jq -r '.architecture')"
@@ -238,7 +245,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
+          SBOM="artifacts/rmq-${VERSION}-tongsuo-openeuler.cyclonedx.json"
           cosign sign --yes "${REPO}@${DIGEST}"
           cosign attest --yes \
             --predicate "$SBOM" \
@@ -256,7 +263,7 @@ jobs:
           bash scripts/verify-cosign.sh \
             "${REPO}@${DIGEST}" "$IDENTITY" artifacts
           {
-            echo "image=${REPO}:${VERSION}-openeuler"
+            echo "image=${REPO}:${VERSION}-tongsuo-openeuler"
             echo "digest=${DIGEST}"
             echo "certificate-identity=${IDENTITY}"
             echo "certificate-oidc-issuer=https://token.actions.githubusercontent.com"
@@ -269,7 +276,7 @@ jobs:
           DIGEST: ${{ steps.resolve.outputs.digest }}
         run: |
           set -euo pipefail
-          FULL_TAG="${VERSION}-openeuler"
+          FULL_TAG="${VERSION}-tongsuo-openeuler"
           if crane digest "${REPO}:${FULL_TAG}" >/dev/null 2>&1; then
             EXISTING="$(crane digest "${REPO}:${FULL_TAG}")"
             if [ "$EXISTING" != "$DIGEST" ]; then
@@ -277,15 +284,22 @@ jobs:
               exit 1
             fi
           fi
-          for tag in "$FULL_TAG" "${UPSTREAM}-openeuler" "latest-openeuler"; do
+          for tag in "$FULL_TAG" "${UPSTREAM}-tongsuo-openeuler" \
+              "latest-tongsuo-openeuler"; do
             crane copy "${REPO}@${DIGEST}" "${REPO}:${tag}"
             test "$(crane digest "${REPO}:${tag}")" = "$DIGEST"
           done
       - name: Re-pull and verify final tag
         run: |
-          IMAGE="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-openeuler"
+          IMAGE="${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler"
           docker pull "$IMAGE"
-          bash scripts/smoke-docker.sh "$IMAGE"
+          SSL_PREFIX=/opt/tongsuo \
+          SSL_KIND=tongsuo \
+          SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
+          SSL_LICENSE_NAME=tongsuo \
+          GM_STORAGE=1 \
+          EXPECTED_VARIANT=tongsuo-openeuler \
+            bash scripts/smoke-docker.sh "$IMAGE"
       - name: Create release assets
         env:
           REPO: ${{ needs.validate.outputs.repo }}
@@ -294,17 +308,18 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
-          SARIF="artifacts/trivy-openeuler.sarif"
-          TRIVY_TEXT="artifacts/trivy-openeuler.txt"
-          cp "$SBOM" "release-assets/rmq-${VERSION}-openeuler.cyclonedx.json"
-          cp "$SARIF" release-assets/trivy-openeuler.sarif
-          cp "$TRIVY_TEXT" release-assets/trivy-openeuler.txt
+          SBOM="artifacts/rmq-${VERSION}-tongsuo-openeuler.cyclonedx.json"
+          SARIF="artifacts/trivy-tongsuo-openeuler.sarif"
+          TRIVY_TEXT="artifacts/trivy-tongsuo-openeuler.txt"
+          cp "$SBOM" "release-assets/rmq-${VERSION}-tongsuo-openeuler.cyclonedx.json"
+          cp "$SARIF" release-assets/trivy-tongsuo-openeuler.sarif
+          cp "$TRIVY_TEXT" release-assets/trivy-tongsuo-openeuler.txt
           IMAGE_REPO="$REPO" \
           IMAGE_DIGEST="$DIGEST" \
           SBOM_PATH="$SBOM" \
           TRIVY_SARIF_PATH="$SARIF" \
           TRIVY_TEXT_PATH="$TRIVY_TEXT" \
+          SSL_KIND=tongsuo \
           SOURCE_COMMIT="$GITHUB_SHA" \
           WORKFLOW_RUN="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
           OUTPUT=release-assets/release-manifest.json \

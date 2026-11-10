@@ -11,5 +11,6 @@ RMQ 首版不复制 `agw` 的双发行版矩阵，也不发布非 management 或
 
 ## Consequences
 
-- 不提供全局 `latest`，只提供 `latest-openeuler`。
+- 不提供全局 `latest`；Tongsuo 默认线提供 `latest-tongsuo-openeuler`，
+  历史标准镜像固定使用完整版本 tag。
 - 需要新变体时必须先新增独立构建矩阵和验收，不得复用未经验证的镜像标签。

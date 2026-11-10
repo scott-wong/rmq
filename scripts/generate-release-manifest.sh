@@ -17,7 +17,7 @@ source_baseline
 output="${OUTPUT:-release-manifest.json}"
 version="$(tr -d ' \n' < "$ROOT_DIR/VERSION")"
 upstream="${version%%-*}"
-ssl_kind="${SSL_KIND:-openssl}"
+ssl_kind="${SSL_KIND:-tongsuo}"
 
 case "$ssl_kind" in
     openssl)
@@ -111,6 +111,7 @@ jq -n \
       tests: ({
         singleNode: "passed",
         amqp: "passed",
+        amqp10: "passed",
         amqps: "passed",
         managementHttp: "passed",
         managementHttps: "passed",
@@ -118,7 +119,8 @@ jq -n \
         persistenceAfterRestart: "passed",
         guestLoopbackOnly: "passed"
       } + (if $sslKind == "tongsuo" then {
-        gmMessageBodyStorage: "passed"
+        gmMessageBodyStorage: "passed",
+        gmAmqp10MessageBodyStorage: "passed"
       } else {} end)),
       artifacts: {
         sbomCycloneDx: $sbom,
@@ -136,13 +138,15 @@ jq -n \
         guestLoopbackOnly: true,
         builtInHealthcheck: false
       } + (if $sslKind == "tongsuo" then {
-        messageBodyStorageEncryption: true
+        messageBodyStorageEncryption: true,
+        amqp10BodyStorageEncryption: true
       } else {} end)),
       claims: {
         officialRabbitmqImage: false,
         rabbitmqVendorSupport: false,
         nationalCryptographyTls: false,
         nationalCryptographyStorage: ($sslKind == "tongsuo"),
+        nationalCryptographyAmqp10Storage: ($sslKind == "tongsuo"),
         fipsCompliance: false,
         clusterTested: false,
         kubernetesTested: false

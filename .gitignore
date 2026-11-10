@@ -4,6 +4,7 @@
 /.release/
 /test/certs/
 /.env
+gm.key
 /.ruff_cache/
 __pycache__/
 *.log

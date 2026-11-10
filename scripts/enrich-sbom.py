@@ -97,7 +97,7 @@ def main() -> int:
 
     components = document.setdefault("components", [])
     image_version = os.environ.get("IMAGE_VERSION") or (
-        f"{env('RMQ_VERSION')}-openeuler"
+        f"{env('RMQ_VERSION')}-tongsuo-openeuler"
     )
     image_component = document.setdefault("metadata", {}).setdefault("component", {})
     image_purl = f"pkg:oci/rmq@{image_version}"
@@ -111,7 +111,7 @@ def main() -> int:
         }
     )
 
-    ssl_kind = os.environ.get("SSL_KIND", "openssl")
+    ssl_kind = os.environ.get("SSL_KIND", "tongsuo")
     if ssl_kind == "openssl":
         ssl_component = metadata(
             name="openssl",

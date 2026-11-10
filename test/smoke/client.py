@@ -11,9 +11,6 @@ import urllib.request
 import pika
 
 
-QUEUE = "rmq.persistence"
-
-
 def env(name: str, default: str | None = None) -> str:
     value = os.environ.get(name, default)
     if value is None:
@@ -23,6 +20,10 @@ def env(name: str, default: str | None = None) -> str:
 
 def message() -> bytes:
     return env("AMQP_BODY", "rmq-persistence-check").encode()
+
+
+def queue() -> str:
+    return env("AMQP_QUEUE", "rmq.persistence")
 
 
 def connection(retries: int = 30) -> pika.BlockingConnection:
@@ -61,31 +62,38 @@ def connection(retries: int = 30) -> pika.BlockingConnection:
 def publish() -> None:
     with connection() as conn:
         channel = conn.channel()
-        channel.queue_declare(queue=QUEUE, durable=True)
+        channel.queue_declare(queue=queue(), durable=True)
         channel.basic_publish(
             exchange="",
-            routing_key=QUEUE,
+            routing_key=queue(),
             body=message(),
             properties=pika.BasicProperties(
                 delivery_mode=2,
                 content_type="text/plain",
             ),
         )
-    print(f"published persistent message to {QUEUE}")
+    print(f"published persistent message to {queue()}")
 
 
 def consume() -> None:
     with connection() as conn:
         channel = conn.channel()
-        method, properties, body = channel.basic_get(queue=QUEUE, auto_ack=False)
+        method, properties, body = channel.basic_get(queue=queue(), auto_ack=False)
         if method is None:
-            raise RuntimeError(f"no message returned from {QUEUE}")
+            raise RuntimeError(f"no message returned from {queue()}")
         if body != message():
             raise RuntimeError(f"unexpected message body: {body!r}")
         if properties.delivery_mode != 2:
             raise RuntimeError("message was not published as persistent")
         channel.basic_ack(delivery_tag=method.delivery_tag)
     print("consumed persisted message")
+
+
+def declare() -> None:
+    with connection() as conn:
+        channel = conn.channel()
+        channel.queue_declare(queue=queue(), durable=True)
+    print(f"declared durable queue {queue()}")
 
 
 def http_get(
@@ -158,13 +166,15 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "mode",
-        choices=("publish", "consume", "http-checks"),
+        choices=("declare", "publish", "consume", "http-checks"),
         nargs="?",
         default="http-checks",
     )
     args = parser.parse_args()
 
-    if args.mode == "publish":
+    if args.mode == "declare":
+        declare()
+    elif args.mode == "publish":
         publish()
     elif args.mode == "consume":
         consume()

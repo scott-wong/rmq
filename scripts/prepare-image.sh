@@ -83,7 +83,7 @@ cp /opt/rmq/stage/10-defaults.conf /etc/rabbitmq/conf.d/10-defaults.conf
 chown rabbitmq:rabbitmq /etc/rabbitmq/conf.d/10-defaults.conf
 chmod 0644 /etc/rabbitmq/conf.d/10-defaults.conf
 
-plugins=(rabbitmq_management rabbitmq_prometheus)
+plugins=(rabbitmq_management rabbitmq_prometheus rabbitmq_amqp1_0)
 if [ "$gm_plugin_available" = "true" ]; then
     test -d "$rabbitmq_home/plugins/rabbitmq_gm-${RABBITMQ_VERSION}" \
         || die "rabbitmq_gm plugin directory is missing"
@@ -130,13 +130,16 @@ cat > /usr/local/share/rmq/build-info.json <<EOF
     "guestLoopbackOnly": true,
     "managementEnabled": true,
     "prometheusEnabled": true,
+    "amqp10Enabled": true,
     "builtInHealthcheck": false,
     "gmStoragePluginAvailable": ${gm_plugin_available}
   },
   "claims": {
     "openEulerDistribution": true,
+    "amqp10Enabled": true,
     "nationalCryptographyTls": false,
     "nationalCryptographyStorage": ${gm_plugin_available},
+    "nationalCryptographyAmqp10Storage": ${gm_plugin_available},
     "fipsCompliance": false,
     "clusterTested": false
   }

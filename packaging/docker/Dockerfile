@@ -97,6 +97,7 @@ LABEL org.opencontainers.image.title="RMQ" \
       io.rmq.gosu.version="${GOSU_VERSION}" \
       io.rmq.rabbitmqadmin.version="${RABBITMQADMIN_VERSION}" \
       io.rmq.security.guest-loopback-only="true" \
+      io.rmq.amqp10.enabled="true" \
       io.rmq.healthcheck.built-in="false"
 
 ENV PATH=/opt/rabbitmq/sbin:/opt/erlang/bin:/opt/openssl/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin \

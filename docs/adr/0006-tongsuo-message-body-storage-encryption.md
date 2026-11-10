@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for the experimental Tongsuo variant. The standard
+Accepted for the Tongsuo variant; extended by
+[ADR 0007](0007-default-tongsuo-and-amqp10.md), which makes Tongsuo the default
+and adds AMQP 1.0 body coverage in `4.4.0-rmq.2`. The standard
 `v4.4.0-rmq.1` release remains OpenSSL-based and unchanged.
 
 ## Context
@@ -19,7 +21,8 @@ SM2 双证书或国密握手状态机。
    `crypto` 动态链接 `/opt/tongsuo/lib/libcrypto.so.3`，并验证 SM3、SM4-GCM、
    SM2 和 NTLS cipher 构建能力。
 2. **消息持久化保护**：使用 vendor plugin `rabbitmq_gm`，对 AMQP 0-9-1
-   消息 body 做 SM4-GCM 加密。这是本阶段唯一的“国密”产品行为。
+   和 AMQP 1.0 消息 body 做 SM4-GCM 加密。这是“国密”产品行为的主体，
+   但不包含传输层 TLCP。
 
 ## Decision
 
@@ -30,6 +33,8 @@ SM2 双证书或国密握手状态机。
 - 插件使用 `rabbit_msg_interceptor` 对 incoming AMQP 0-9-1 body 加密，对
   outgoing body 解密。加密元数据使用 `mc:set_annotation/3` 和
   `mc:take_annotation/2` 保存，不能信任客户端 headers。
+- AMQP 1.0 body 支持 `data`、`amqp-value` 和 `amqp-sequence`，并保留原始
+  body descriptor code；未知 body 布局在入队前拒绝。
 - 只覆盖消息 body。消息属性、headers、routing key、queue index、Mnesia 元数据
   和整个数据目录均不在加密范围内。
 - Tongsuo 变体仍运行标准 TLS/AMQPS/HTTPS 回归，以证明 Tongsuo 动态链接没有
@@ -57,7 +62,7 @@ SM2 双证书或国密握手状态机。
   `ECDHE-SM2-SM4-GCM-SM3` 的 `NTLSv1.1` 输出。
 - `scripts/smoke-docker.sh` 在 `GM_STORAGE=1` 时验证 SM4-GCM/SM3 往返、
   插件启用、持久消息重启后消费，以及 Mnesia 文件不含明文 marker。
-- `make verify` 检查标准变体、Tongsuo Dockerfile、插件 annotation 使用和
+- `make verify` 检查 Tongsuo 默认构建、历史标准 Dockerfile、插件 annotation 使用和
   “不宣称 TLS+GM”的标签。
 - 正式发布前仍需补充独立安全评审、密钥管理设计、Tongsuo CVE 审计和真实
   TLCP 互操作测试；这些不是本 ADR 的已完成项。

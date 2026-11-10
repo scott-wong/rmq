@@ -63,6 +63,20 @@ run_client() {
         bash -c "python -m pip install --no-cache-dir --require-hashes -q -r /test/requirements.txt && python /test/client.py $mode"
 }
 
+run_amqp10() {
+    local mode="$1"
+    local prefix="$2"
+    "$DOCKER" exec \
+        -e AMQP_HOST=rmq-test \
+        -e AMQP_PORT=5671 \
+        -e AMQP_USER="$USER_NAME" \
+        -e AMQP_PASSWORD="$USER_PASSWORD" \
+        -e AMQP_CAFILE=/etc/rabbitmq/certs/ca.crt \
+        -e ERL_LIBS=/opt/rabbitmq/plugins \
+        "$CONTAINER" \
+        escript /test/amqp10_smoke.escript "$mode" "$AMQP10_QUEUE" "$prefix"
+}
+
 inspect_image_format() {
     "$DOCKER" image inspect "$IMAGE" --format "$1" 2>/dev/null ||
         printf 'INSPECT_ERROR'
@@ -99,6 +113,7 @@ server_args=(
     -e RABBITMQ_DEFAULT_PASS="$USER_PASSWORD"
     -v "$TMPDIR_LOCAL/certs:/etc/rabbitmq/certs:ro"
     -v "$ROOT_DIR/test/smoke/rabbitmq-tls.conf:/etc/rabbitmq/conf.d/99-tls.conf:ro"
+    -v "$ROOT_DIR/test/smoke:/test:ro"
 )
 server_command=(rabbitmq-server)
 
@@ -147,6 +162,7 @@ wait_for_rabbitmq
     enabled_plugins="$(rabbitmq-plugins list -e)"
     [[ "$enabled_plugins" == *rabbitmq_management* ]]
     [[ "$enabled_plugins" == *rabbitmq_prometheus* ]]
+    [[ "$enabled_plugins" == *rabbitmq_amqp1_0* ]]
     if [ "$GM_STORAGE" = "1" ]; then
         [[ "$enabled_plugins" == *rabbitmq_gm* ]]
         crypto_caps="$("/opt/erlang/bin/erl" -noshell -eval \
@@ -205,8 +221,10 @@ test "$(inspect_image_format '{{.Config.Entrypoint}}')" = "[docker-entrypoint.sh
 test "$(inspect_image_format '{{.Config.Cmd}}')" = "[rabbitmq-server]"
 test "$(inspect_image_format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" = "true"
 test "$(inspect_image_format '{{index .Config.Labels "io.rmq.variant"}}')" = "$EXPECTED_VARIANT"
+test "$(inspect_image_format '{{index .Config.Labels "io.rmq.amqp10.enabled"}}')" = "true"
 if [ "$GM_STORAGE" = "1" ]; then
     test "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" = "true"
+    test "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.amqp10-body-encryption"}}')" = "true"
     test "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.tls"}}')" = "false"
 fi
 printf 'smoke: image metadata checks passed\n'
@@ -216,13 +234,30 @@ printf 'smoke: OS check passed\n'
 
 if [ "$GM_STORAGE" = "1" ]; then
     GM_BODY="rmq-gm-storage-marker-$RANDOM"
+    AMQP10_QUEUE="rmq.gm.amqp10"
+    AMQP10_PREFIX="rmq-gm-amqp10-$RANDOM"
     run_client publish -e AMQP_BODY="$GM_BODY"
     printf 'smoke: GM publish passed\n'
+    run_client declare -e AMQP_QUEUE="$AMQP10_QUEUE"
+    run_amqp10 publish "$AMQP10_PREFIX"
+    printf 'smoke: AMQP 1.0 GM publish passed\n'
     sleep 2
-    if "$DOCKER" exec "$CONTAINER" \
-        grep -R -a -l "$GM_BODY" /var/lib/rabbitmq/mnesia >/dev/null; then
+    set +e
+    "$DOCKER" exec "$CONTAINER" \
+        grep -R -a -l \
+        -e "$GM_BODY" \
+        -e "$AMQP10_PREFIX-data" \
+        -e "$AMQP10_PREFIX-value" \
+        -e "$AMQP10_PREFIX-sequence" \
+        /var/lib/rabbitmq/mnesia >/dev/null
+    grep_rc=$?
+    set -e
+    if [ "$grep_rc" -eq 0 ]; then
         die "GM plaintext marker found in the message store"
+    elif [ "$grep_rc" -ne 1 ]; then
+        die "GM plaintext scan failed with exit $grep_rc"
     fi
+    printf 'smoke: AMQP 0-9-1 and AMQP 1.0 plaintext absent from store\n'
 else
     run_client publish
     printf 'smoke: standard publish passed\n'
@@ -235,12 +270,15 @@ if [ "$GM_STORAGE" = "1" ]; then
         -e AMQP_BODY="$GM_BODY" \
         -e AMQP_PORT=5671 \
         -e AMQP_TLS=1
+    printf 'smoke: AMQP 0-9-1 TLS consume passed\n'
+    run_amqp10 consume "$AMQP10_PREFIX"
+    printf 'smoke: AMQP 1.0 TLS consume passed\n'
 else
     run_client consume \
         -e AMQP_PORT=5671 \
         -e AMQP_TLS=1
+    printf 'smoke: standard TLS consume passed\n'
 fi
-printf 'smoke: TLS consume passed\n'
 run_client http-checks
 printf 'smoke: management and metrics checks passed\n'
 

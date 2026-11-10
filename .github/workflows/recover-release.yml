@@ -71,11 +71,11 @@ jobs:
           [[ "$EXPECTED_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           VERSION="$(tr -d ' \n' < VERSION)"
           test "v${VERSION}" = "$RELEASE_TAG"
-          test "$CANDIDATE_TAG" = "${VERSION}-openeuler-candidate"
+          test "$CANDIDATE_TAG" = "${VERSION}-tongsuo-openeuler-candidate"
           test "$(git rev-parse HEAD)" = "$(git rev-list -n 1 "$RELEASE_TAG")"
-          test -f "artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
-          test -f artifacts/trivy-openeuler.sarif
-          test -f artifacts/trivy-openeuler.txt
+          test -f "artifacts/rmq-${VERSION}-tongsuo-openeuler.cyclonedx.json"
+          test -f artifacts/trivy-tongsuo-openeuler.sarif
+          test -f artifacts/trivy-tongsuo-openeuler.txt
           OWNER="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           REPO="ghcr.io/${OWNER}/rmq"
           UPSTREAM="${VERSION%%-*}"
@@ -145,13 +145,14 @@ jobs:
           DIGEST: ${{ steps.candidate.outputs.digest }}
         run: |
           set -euo pipefail
-          FULL_TAG="${VERSION}-openeuler"
+          FULL_TAG="${VERSION}-tongsuo-openeuler"
           if crane digest "${REPO}:${FULL_TAG}" >/dev/null 2>&1; then
             EXISTING="$(crane digest "${REPO}:${FULL_TAG}")"
             test "$EXISTING" = "$DIGEST" \
               || { echo "ERROR: immutable tag ${FULL_TAG} already points to ${EXISTING}" >&2; exit 1; }
           fi
-          for tag in "$FULL_TAG" "${UPSTREAM}-openeuler" "latest-openeuler"; do
+          for tag in "$FULL_TAG" "${UPSTREAM}-tongsuo-openeuler" \
+              "latest-tongsuo-openeuler"; do
             crane copy "${REPO}@${DIGEST}" "${REPO}:${tag}"
             test "$(crane digest "${REPO}:${tag}")" = "$DIGEST"
           done
@@ -163,9 +164,15 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-          IMAGE="${REPO}:${VERSION}-openeuler"
+          IMAGE="${REPO}:${VERSION}-tongsuo-openeuler"
           docker pull "$IMAGE"
-          bash scripts/smoke-docker.sh "$IMAGE"
+          SSL_PREFIX=/opt/tongsuo \
+          SSL_KIND=tongsuo \
+          SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
+          SSL_LICENSE_NAME=tongsuo \
+          GM_STORAGE=1 \
+          EXPECTED_VARIANT=tongsuo-openeuler \
+            bash scripts/smoke-docker.sh "$IMAGE"
 
       - name: Create release assets
         working-directory: source
@@ -178,12 +185,12 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release-assets
-          SBOM="artifacts/rmq-${VERSION}-openeuler.cyclonedx.json"
-          SARIF="artifacts/trivy-openeuler.sarif"
-          TRIVY_TEXT="artifacts/trivy-openeuler.txt"
+          SBOM="artifacts/rmq-${VERSION}-tongsuo-openeuler.cyclonedx.json"
+          SARIF="artifacts/trivy-tongsuo-openeuler.sarif"
+          TRIVY_TEXT="artifacts/trivy-tongsuo-openeuler.txt"
           cp "$SBOM" "release-assets/$(basename "$SBOM")"
-          cp "$SARIF" release-assets/trivy-openeuler.sarif
-          cp "$TRIVY_TEXT" release-assets/trivy-openeuler.txt
+          cp "$SARIF" release-assets/trivy-tongsuo-openeuler.sarif
+          cp "$TRIVY_TEXT" release-assets/trivy-tongsuo-openeuler.txt
           if [ -f artifacts/cosign-verify.txt ]; then
             cp artifacts/cosign-verify.txt release-assets/cosign-verify.txt
             cp artifacts/cosign-verify-attestation.txt release-assets/cosign-verify-attestation.txt
@@ -192,7 +199,7 @@ jobs:
               "$SOURCE_RUN_URL" > release-assets/cosign-verify.txt
           fi
           {
-            echo "image=${REPO}:${VERSION}-openeuler"
+            echo "image=${REPO}:${VERSION}-tongsuo-openeuler"
             echo "digest=${DIGEST}"
             echo "certificate-identity=https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish.yml@refs/tags/${{ inputs.release_tag }}"
             echo "certificate-oidc-issuer=https://token.actions.githubusercontent.com"
@@ -206,6 +213,7 @@ jobs:
           SBOM_PATH="$SBOM" \
           TRIVY_SARIF_PATH="$SARIF" \
           TRIVY_TEXT_PATH="$TRIVY_TEXT" \
+          SSL_KIND=tongsuo \
           SOURCE_COMMIT="$SOURCE_COMMIT" \
           WORKFLOW_RUN="$SOURCE_RUN_URL" \
           OUTPUT=release-assets/release-manifest.json \

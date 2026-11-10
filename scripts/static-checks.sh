@@ -71,19 +71,6 @@ else
     printf '[skip] Ruby YAML parser unavailable\n'
 fi
 
-dockerfile="$ROOT_DIR/packaging/docker/Dockerfile"
-[ -f "$dockerfile" ] || die "Dockerfile missing"
-! grep -qE '^FROM[[:space:]]+(rabbitmq|ubuntu)' "$dockerfile" \
-    || die "Dockerfile must not derive from RabbitMQ or Ubuntu images"
-grep -q 'AS rmq-final' "$dockerfile" \
-    || die "Dockerfile is missing the rmq-final target"
-grep -q 'CMD \["rabbitmq-server"\]' "$dockerfile" \
-    || die "Dockerfile must preserve the rabbitmq-server CMD"
-! grep -q '^HEALTHCHECK' "$dockerfile" \
-    || die "RMQ must not define a built-in HEALTHCHECK"
-grep -q 'io.rmq.security.guest-loopback-only="true"' "$dockerfile" \
-    || die "missing secure-default OCI label"
-
 tongsuo_dockerfile="$ROOT_DIR/packaging/docker/Dockerfile.tongsuo"
 [ -f "$tongsuo_dockerfile" ] || die "Tongsuo Dockerfile missing"
 ! grep -qE '^FROM[[:space:]]+(rabbitmq|ubuntu)' "$tongsuo_dockerfile" \
@@ -98,8 +85,21 @@ grep -q 'SSL_PREFIX=/opt/tongsuo' "$tongsuo_dockerfile" \
     || die "Tongsuo Dockerfile must link the runtime to /opt/tongsuo"
 grep -q 'io.rmq.gm.tls="false"' "$tongsuo_dockerfile" \
     || die "Tongsuo variant must explicitly mark TLS+GM as not implemented"
+grep -q 'io.rmq.gm.amqp10-body-encryption="true"' "$tongsuo_dockerfile" \
+    || die "Tongsuo variant must label AMQP 1.0 body encryption"
 grep -q 'COPY --from=gm-plugin-builder' "$tongsuo_dockerfile" \
     || die "Tongsuo Dockerfile must install the GM plugin"
+grep -q 'Dockerfile.tongsuo' "$ROOT_DIR/Makefile" \
+    || die "Makefile must build Tongsuo by default"
+grep -q 'rabbitmq_amqp1_0' "$ROOT_DIR/scripts/prepare-image.sh" \
+    || die "RabbitMQ AMQP 1.0 plugin must be enabled in images"
+
+standard_dockerfile="$ROOT_DIR/packaging/docker/Dockerfile"
+[ -f "$standard_dockerfile" ] || die "historical standard Dockerfile missing"
+grep -q 'AS rmq-final' "$standard_dockerfile" \
+    || die "historical Dockerfile is missing the rmq-final target"
+grep -q 'io.rmq.security.guest-loopback-only="true"' "$standard_dockerfile" \
+    || die "historical Dockerfile is missing the secure-default OCI label"
 
 plugin_dir="$ROOT_DIR/packaging/plugin/rabbitmq_gm"
 [ -f "$plugin_dir/src/rabbitmq_gm.app" ] || die "GM plugin app file missing"
@@ -109,6 +109,20 @@ grep -q 'mc:set_annotation' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
     || die "GM plugin must use broker annotations for encrypted metadata"
 grep -q 'mc:take_annotation' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
     || die "GM plugin must clear broker annotations before delivery"
+grep -q 'mc_amqp' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
+    || die "GM plugin must dispatch AMQP 1.0 messages"
+grep -q 'amqp10_body_data' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
+    || die "GM plugin must handle AMQP 1.0 body sections"
+grep -q 'v1_0.amqp_value' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
+    || die "GM plugin must accept AMQP 1.0 amqp-value bodies"
+grep -q 'v1_0.amqp_sequence' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
+    || die "GM plugin must accept AMQP 1.0 sequence bodies"
+grep -q 'binary_to_term(Plain, \[safe\])' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
+    || die "GM plugin must decode authenticated terms safely"
+grep -q 'amqp10_common' "$plugin_dir/src/rabbitmq_gm.app" \
+    || die "GM plugin must declare its AMQP 1.0 dependency"
+[ -f "$ROOT_DIR/test/smoke/amqp10_smoke.escript" ] \
+    || die "AMQP 1.0 smoke client missing"
 ! grep -q 'headers_for_decryption' "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" \
     || die "GM plugin must not trust client-controlled headers"
 
