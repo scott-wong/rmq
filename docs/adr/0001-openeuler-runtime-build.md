@@ -2,7 +2,8 @@
 
 RMQ 不从 `rabbitmq:4.4` 或 Ubuntu 镜像派生。最终镜像使用固定 digest 的
 `quay.io/openeuler/openeuler:24.03-lts-sp4`，并在同发行版 builder 中编译
-OpenSSL 与 Erlang/OTP，再安装校验过的 RabbitMQ generic Unix 包。
+Tongsuo（默认；历史标准变体为 OpenSSL）与 Erlang/OTP，再安装校验过的
+RabbitMQ generic Unix 包。
 
 ## Considered Options
 
@@ -11,7 +12,7 @@ OpenSSL 与 Erlang/OTP，再安装校验过的 RabbitMQ generic Unix 包。
 - **只使用 openEuler 仓库的 Erlang/RabbitMQ 包**：被否。版本和补丁节奏不受
   RMQ 控制，无法满足 RabbitMQ 4.4 的运行时组合。
 - **在当前发行版内源码编译并在干净 final 阶段组装**：采用。构建工具与运行时
-  隔离，OpenSSL/OTP 链接关系可验证。
+  隔离，Tongsuo/OTP 链接关系可验证。
 
 ## Consequences
 
