@@ -63,8 +63,8 @@ run_client() {
         bash -c "python -m pip install --no-cache-dir --require-hashes -q -r /test/requirements.txt && python /test/client.py $mode"
 }
 
-inspect_format() {
-    "$DOCKER" inspect "$CONTAINER" --format "$1" 2>/dev/null ||
+inspect_image_format() {
+    "$DOCKER" image inspect "$IMAGE" --format "$1" 2>/dev/null ||
         printf 'INSPECT_ERROR'
 }
 
@@ -190,24 +190,24 @@ printf 'smoke: process user check passed\n'
 printf 'smoke: Tongsuo linkage check passed\n'
 
 printf 'smoke metadata: user=%s entrypoint=%s cmd=%s health=%s guest=%s variant=%s gm-enabled=%s gm-tls=%s\n' \
-    "$(inspect_format '{{.Config.User}}')" \
-    "$(inspect_format '{{.Config.Entrypoint}}')" \
-    "$(inspect_format '{{.Config.Cmd}}')" \
-    "$(inspect_format '{{json .Config.Healthcheck}}')" \
-    "$(inspect_format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" \
-    "$(inspect_format '{{index .Config.Labels "io.rmq.variant"}}')" \
-    "$(inspect_format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" \
-    "$(inspect_format '{{index .Config.Labels "io.rmq.gm.tls"}}')"
+    "$(inspect_image_format '{{.Config.User}}')" \
+    "$(inspect_image_format '{{.Config.Entrypoint}}')" \
+    "$(inspect_image_format '{{.Config.Cmd}}')" \
+    "$(inspect_image_format '{{json .Config.Healthcheck}}')" \
+    "$(inspect_image_format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" \
+    "$(inspect_image_format '{{index .Config.Labels "io.rmq.variant"}}')" \
+    "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" \
+    "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.tls"}}')"
 
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.User}}')" = ""
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{json .Config.Healthcheck}}')" = "null"
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.Entrypoint}}')" = "[docker-entrypoint.sh]"
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{.Config.Cmd}}')" = "[rabbitmq-server]"
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" = "true"
-test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.variant"}}')" = "$EXPECTED_VARIANT"
+test "$(inspect_image_format '{{.Config.User}}')" = ""
+test "$(inspect_image_format '{{json .Config.Healthcheck}}')" = "null"
+test "$(inspect_image_format '{{.Config.Entrypoint}}')" = "[docker-entrypoint.sh]"
+test "$(inspect_image_format '{{.Config.Cmd}}')" = "[rabbitmq-server]"
+test "$(inspect_image_format '{{index .Config.Labels "io.rmq.security.guest-loopback-only"}}')" = "true"
+test "$(inspect_image_format '{{index .Config.Labels "io.rmq.variant"}}')" = "$EXPECTED_VARIANT"
 if [ "$GM_STORAGE" = "1" ]; then
-    test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" = "true"
-    test "$("$DOCKER" inspect "$CONTAINER" --format '{{index .Config.Labels "io.rmq.gm.tls"}}')" = "false"
+    test "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.storage-plugin-enabled"}}')" = "true"
+    test "$(inspect_image_format '{{index .Config.Labels "io.rmq.gm.tls"}}')" = "false"
 fi
 printf 'smoke: image metadata checks passed\n'
 
