@@ -94,7 +94,7 @@ run_management_ui() {
         -v "$ROOT_DIR/test/ui:/test:ro" \
         -v "$UI_ARTIFACTS_DIR:/artifacts" \
         "$PLAYWRIGHT_IMAGE" \
-        python /test/test_management_ui.py
+        bash -c "python -m pip install --no-cache-dir --disable-pip-version-check -q 'playwright==${PLAYWRIGHT_VERSION}' && python /test/test_management_ui.py"
 }
 
 inspect_image_format() {
