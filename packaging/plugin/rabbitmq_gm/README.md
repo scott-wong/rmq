@@ -40,6 +40,9 @@ AMQP 1.0 listener 需要启用 `rabbitmq_amqp1_0`。插件加密 AMQP 1.0 body �
 默认 key id 为 `v1`。当前 key id 会写入消息 annotation 并参与 AAD，但实现只加载
 一个主密钥，不包含多密钥轮换或 KMS 集成。
 
+key id 一旦用于生产消息，必须与主密钥一起保持稳定；修改 key id 会导致旧消息
+无法用当前配置解密。
+
 ## 启动配置
 
 插件从 `RMQ_GM_KEY_FILE` 读取密钥文件；未设置时默认读取
@@ -87,7 +90,7 @@ RMQ 入口脚本会把只读密钥复制到 `/run/rmq/gm.key`，再交给 `rabbi
 RMQ Tongsuo 镜像默认启用插件。手工安装时：
 
 ```sh
-rabbitmq-plugins enable rabbitmq_gm
+rabbitmq-plugins enable rabbitmq_amqp1_0 rabbitmq_gm
 ```
 
 从本仓库编译：

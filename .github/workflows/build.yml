@@ -5,12 +5,22 @@ on:
     branches:
       - main
     paths-ignore:
-      - '**.md'
+      - '*.md'
+      - '**/*.md'
       - 'docs/**'
       - 'examples/**'
+      - 'packaging/**/README.md'
       - '.gitignore'
       - 'LICENSE'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - '**/*.md'
+      - 'docs/**'
+      - 'examples/**'
+      - 'packaging/**/README.md'
+      - '.gitignore'
+      - 'LICENSE'
   workflow_dispatch:
     inputs:
       build_image:
