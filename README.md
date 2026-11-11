@@ -1,5 +1,9 @@
 # RMQ
 
+<p align="center">
+  <img src="branding/rmq-logo.svg" width="360" alt="RMQ — Reliable Message Queue">
+</p>
+
 RMQ 是一个独立维护的 openEuler RabbitMQ 4.4 management 容器发行版。
 项目基于 [RabbitMQ](https://www.rabbitmq.com/)，但**不是 RabbitMQ 官方镜像**，
 也不受 RabbitMQ 团队或 openEuler 社区的官方支持。
@@ -17,12 +21,6 @@ ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
 - Erlang/OTP `29.1.2`
 - Tongsuo `8.5.0`（OpenSSL `3.5.4` 源码基线）
 - gosu `1.20`、rabbitmqadmin `2.35.0`
-
-已经发布的 `v4.4.0-rmq.1` 标准 OpenSSL 镜像保持不变：
-
-```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.1-openeuler
-```
 
 标准 Dockerfile 仍保留在仓库中，用于复现该历史版本；默认 CI、默认 Makefile
 目标和后续发布都构建 Tongsuo 版本，不再默认构建标准版本。
@@ -253,6 +251,12 @@ RabbitMQ 的 TLS 主要在 Erlang/OTP `ssl` 层完成；OTP `29.1.2` 没有 TLCP
 变体的 OpenSSL `3.5.9` **未审计等价**。
 
 术语见 [`GLOSSARY.md`](GLOSSARY.md)。
+
+## 品牌资源
+
+浅色横版 Logo 用于 README 和浅色背景，深色横版用于深色界面；独立图标提供
+SVG 和透明 PNG，覆盖 16 至 512 像素。视觉规范、颜色和用法见
+[`branding/README.md`](branding/README.md)。
 
 ## 许可证
 

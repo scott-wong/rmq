@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 440 170" role="img" aria-labelledby="rmq-logo-dark-title rmq-logo-dark-desc">
+  <title id="rmq-logo-dark-title">RMQ — Reliable Message Queue</title>
+  <desc id="rmq-logo-dark-desc">The RMQ queue and protected payload mark and wordmark for dark backgrounds.</desc>
+  <g transform="translate(16 26)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M60 10 L104 35 L104 85 L60 110 L16 85 L16 35 Z" stroke="#F4F7FB" stroke-width="5.5"/>
+    <path d="M30 44 H54 M30 60 H54 M30 76 H54" stroke="#28B8C4" stroke-width="7"/>
+    <path d="M54 44 L68 60 L54 76" stroke="#28B8C4" stroke-width="7"/>
+    <rect x="68" y="47" width="28" height="26" rx="7" fill="#F2B45C"/>
+    <path d="M75 60 L80 65 L89 55" stroke="#101F32" stroke-width="4"/>
+  </g>
+  <text x="156" y="94" font-family="Inter, Manrope, 'Helvetica Neue', Arial, sans-serif" font-size="72" font-weight="800" letter-spacing="5" fill="#F4F7FB">RMQ</text>
+  <text x="159" y="124" font-family="Inter, Manrope, 'Helvetica Neue', Arial, sans-serif" font-size="13" font-weight="650" letter-spacing="3" fill="#9FC2D2">RELIABLE MESSAGE QUEUE</text>
+</svg>
