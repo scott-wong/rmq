@@ -102,6 +102,7 @@ grep -q 'io.rmq.security.guest-loopback-only="true"' "$standard_dockerfile" \
     || die "historical Dockerfile is missing the secure-default OCI label"
 
 plugin_dir="$ROOT_DIR/packaging/plugin/rabbitmq_gm"
+[ -f "$plugin_dir/README.md" ] || die "GM plugin README missing"
 [ -f "$plugin_dir/src/rabbitmq_gm.app" ] || die "GM plugin app file missing"
 [ -f "$plugin_dir/src/rabbitmq_gm_msg_interceptor.erl" ] \
     || die "GM plugin interceptor missing"

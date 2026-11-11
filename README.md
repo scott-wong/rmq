@@ -17,7 +17,6 @@ ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
 - Erlang/OTP `29.1.2`
 - Tongsuo `8.5.0`（OpenSSL `3.5.4` 源码基线）
 - gosu `1.20`、rabbitmqadmin `2.35.0`
-- 单节点验收；不宣称已验证集群、Kubernetes Operator 或 TLCP
 
 已经发布的 `v4.4.0-rmq.1` 标准 OpenSSL 镜像保持不变：
 
@@ -69,6 +68,9 @@ docker run --detach \
 Tongsuo 变体把 `/opt/openssl` 替换为 `/opt/tongsuo`，重新编译 Erlang/OTP，
 并安装 `rabbitmq_gm` vendor plugin。插件默认启用；缺少有效密钥时容器启动失败，
 不会静默降级为明文存储。
+
+插件的独立说明、密钥格式、annotation 含义和运维边界见
+[`packaging/plugin/rabbitmq_gm/README.md`](packaging/plugin/rabbitmq_gm/README.md)。
 
 构建与验收：
 
