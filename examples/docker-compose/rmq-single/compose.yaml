@@ -1,6 +1,6 @@
 services:
   rmq:
-    image: ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+    image: ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
     hostname: rmq-single
     restart: unless-stopped
     environment:

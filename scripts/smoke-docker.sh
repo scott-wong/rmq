@@ -8,6 +8,7 @@ source_baseline
 
 IMAGE="${1:?usage: smoke-docker.sh IMAGE}"
 DOCKER="${DOCKER:-docker}"
+RMQ_VERSION="${RMQ_VERSION:-$(tr -d ' \n' < "$ROOT_DIR/VERSION")}"
 CONTAINER="rmq-smoke-$RANDOM-$$"
 NETWORK="rmq-smoke-network-$RANDOM-$$"
 TMPDIR_LOCAL="$(mktemp -d "${TMPDIR:-/tmp}/rmq-smoke.XXXXXX")"
@@ -19,6 +20,8 @@ SSL_VERSION_PATTERN="${SSL_VERSION_PATTERN:-OpenSSL 3.5.9}"
 SSL_LICENSE_NAME="${SSL_LICENSE_NAME:-openssl}"
 GM_STORAGE="${GM_STORAGE:-0}"
 EXPECTED_VARIANT="${EXPECTED_VARIANT:-openeuler}"
+UI_TEST="${UI_TEST:-0}"
+UI_ARTIFACTS_DIR="${UI_ARTIFACTS_DIR:-$ROOT_DIR/artifacts/ui}"
 
 cleanup() {
     "$DOCKER" rm -f "$CONTAINER" >/dev/null 2>&1 || true
@@ -75,6 +78,23 @@ run_amqp10() {
         -e ERL_LIBS=/opt/rabbitmq/plugins \
         "$CONTAINER" \
         escript /test/amqp10_smoke.escript "$mode" "$AMQP10_QUEUE" "$prefix"
+}
+
+run_management_ui() {
+    test "$UI_TEST" = "1" || return 0
+    mkdir -p "$UI_ARTIFACTS_DIR"
+    "$DOCKER" run --rm \
+        --network "$NETWORK" \
+        -e RMQ_HOST=rmq-test \
+        -e RMQ_PORT=15671 \
+        -e RMQ_USER="$USER_NAME" \
+        -e RMQ_PASSWORD="$USER_PASSWORD" \
+        -e RMQ_VERSION="$RMQ_VERSION" \
+        -e UI_ARTIFACTS_DIR=/artifacts \
+        -v "$ROOT_DIR/test/ui:/test:ro" \
+        -v "$UI_ARTIFACTS_DIR:/artifacts" \
+        "$PLAYWRIGHT_IMAGE" \
+        python /test/test_management_ui.py
 }
 
 inspect_image_format() {
@@ -281,5 +301,9 @@ else
 fi
 run_client http-checks
 printf 'smoke: management and metrics checks passed\n'
+run_management_ui
+if [ "$UI_TEST" = "1" ]; then
+    printf 'smoke: management UI browser checks passed\n'
+fi
 
 printf 'RMQ smoke test passed for %s\n' "$IMAGE"

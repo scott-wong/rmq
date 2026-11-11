@@ -34,6 +34,16 @@ stretch, rotate, add a drop shadow, or place the light lockup on a dark field.
 The tagline used in the lockup is `RELIABLE MESSAGE QUEUE`; the longer campaign
 line is **Reliable Messaging. Protected Payloads.**
 
+The management console uses a separate `204 × 37` compact lockup so the
+wordmark remains legible in the existing header slot:
+
+- `packaging/management-ui/www/img/rmq-logo-light.svg`
+- `packaging/management-ui/www/img/rmq-logo-dark.svg`
+- `packaging/management-ui/www/img/rmq-favicon.svg`
+
+The login page, header, browser title and favicon use these RMQ assets. The
+RabbitMQ rabbit mark is not used in the management UI shell.
+
 ## PNG files
 
 All PNG files have transparent backgrounds:

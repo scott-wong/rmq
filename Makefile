@@ -81,6 +81,7 @@ smoke: check
 	SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
 	SSL_LICENSE_NAME=tongsuo \
 	GM_STORAGE=1 \
+	UI_TEST=1 \
 	EXPECTED_VARIANT=tongsuo-openeuler \
 		bash scripts/smoke-docker.sh "$(IMAGE)"
 

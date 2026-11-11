@@ -3,6 +3,10 @@
 This example exposes AMQP, the management UI and Prometheus metrics on the
 host. Do not publish these ports on an untrusted network.
 
+The management UI opens in Simplified Chinese by default. Use the language
+selector in the login page or header to switch to English, or append
+`?lang=en-US` to the management URL.
+
 ```sh
 cp .env.example .env
 ${EDITOR:-vi} .env

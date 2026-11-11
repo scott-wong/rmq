@@ -9,10 +9,10 @@ RMQ 是一个独立维护的 openEuler RabbitMQ 4.4 management 容器发行版�
 也不受 RabbitMQ 团队或 openEuler 社区的官方支持。
 
 默认镜像是 **Tongsuo 变体**，使用 `rabbitmq_gm` 对消息 body 做 SM4-GCM
-静态存储加密：
+静态存储加密，并包含默认中文、可切换英文的 RMQ 管理控制台：
 
 ```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
 ```
 
 - `linux/amd64`
@@ -47,12 +47,34 @@ docker run --detach \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
 ```
 
 管理界面为 `http://127.0.0.1:15672/`，Prometheus 指标为
 `http://127.0.0.1:15692/metrics`。AMQP 1.0 客户端可以连接同一 `5672` 端口；
 标准 TLS 使用 `5671`。
+
+## 管理控制台
+
+默认 Tongsuo 镜像包含 RMQ 管理控制台 fork。控制台默认使用简体中文，登录页和
+页面右上角都可以切换英文；选择会保存到浏览器 `localStorage`，也可以通过 URL
+临时覆盖：
+
+```text
+https://rmq.example.test:15671/?lang=zh-CN
+https://rmq.example.test:15671/?lang=en-US
+```
+
+优先级为 URL `lang` > `localStorage` > `zh-CN`。当前翻译覆盖登录、导航、概览、
+连接、通道、交换机、队列、用户、虚拟主机、策略、限制、特性开关和常用操作；
+协议字段、原始错误详情、API 文档和第三方许可证文本保持英文。
+
+控制台只替换 management 插件的静态 `priv/www` 资源，不改 RabbitMQ 管理 API、
+认证或路由。登录页、页头、页面标题和 favicon 使用 RMQ 品牌，不再显示
+RabbitMQ 兔子标识；版本徽标显示 RMQ 版本，RabbitMQ/Erlang 版本仍可从节点详情
+和 API 查看。控制台 fork 的独立说明、来源锁和更新方法见
+[`packaging/management-ui/README.md`](packaging/management-ui/README.md)，设计决策见
+[`docs/adr/0008-management-console-fork.md`](docs/adr/0008-management-console-fork.md)。
 
 `RABBITMQ_DEFAULT_*` 环境变量适合开发、CI 和首次启动示例；上游文档明确不建议
 把它作为生产用户管理方案。生产部署应通过受控的 `rabbitmq.conf`、definitions
@@ -112,7 +134,7 @@ docker run --detach \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-gm-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
 ```
 
 这是**消息 body 的静态存储保护**，不是全盘加密。queue index、Mnesia、headers、
@@ -158,13 +180,14 @@ RabbitMQ 4.4 在只配置 `management.ssl.*` 时会进入 HTTPS-only 模式，�
 `VERSION` 是唯一版本事实源，格式为 `<上游版本>-rmq.<修订号>`。当前版本线：
 
 ```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler  # 不可移动的完整版本
+ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler  # 不可移动的完整版本
 ghcr.io/scott-wong/rmq:4.4.0-tongsuo-openeuler         # 上游线别名
 ghcr.io/scott-wong/rmq:latest-tongsuo-openeuler        # 浮动别名
 ```
 
-已经发布的 `4.4.0-rmq.1-openeuler` 不会移动。同一上游版本需要安全重建时 bump
-`rmq.N`；不覆盖完整版本标签，也不把 Tongsuo 镜像伪装成标准 OpenSSL 变体。
+已经发布的 `4.4.0-rmq.1-openeuler` 和 `4.4.0-rmq.2-tongsuo-openeuler` 不会移动。
+同一上游版本需要安全重建时 bump `rmq.N`；不覆盖完整版本标签，也不把 Tongsuo
+镜像伪装成标准 OpenSSL 变体。
 
 ## 构建
 
@@ -202,6 +225,8 @@ openEuler 基础镜像按 index digest 固定，但 RPM 的具体 patch level �
 - AMQP 1.0 `data`、`amqp-value`、`amqp-sequence` 发布/消费，以及重启后的恢复
 - 标准 AMQPS 与 management HTTPS
 - management HTTP/HTTPS API、UI 与 Prometheus 指标
+- Playwright 加载真实 HTTPS 控制台，检查中文登录、概览、用户页、英文切换、
+  语言偏好、浅色/深色主题、RMQ 标题/logo/favicon，并保存截图 artifact
 - guest 远端访问被拒绝
 - Erlang crypto 与 `/opt/tongsuo` 动态链接关系
 - AMQP 1.0 插件、management、Prometheus 和 `rabbitmqadmin`
@@ -221,10 +246,10 @@ attestation。
 ```sh
 cosign verify \
   --certificate-identity \
-    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.2' \
+    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.3' \
   --certificate-oidc-issuer \
     'https://token.actions.githubusercontent.com' \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.2-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
 ```
 
 Trivy 阻断 `HIGH`/`CRITICAL` 中已有修复版本的漏洞与 secret 命中；未修复漏洞仍会
@@ -256,7 +281,8 @@ RabbitMQ 的 TLS 主要在 Erlang/OTP `ssl` 层完成；OTP `29.1.2` 没有 TLCP
 
 浅色横版 Logo 用于 README 和浅色背景，深色横版用于深色界面；独立图标提供
 SVG 和透明 PNG，覆盖 16 至 512 像素。视觉规范、颜色和用法见
-[`branding/README.md`](branding/README.md)。
+[`branding/README.md`](branding/README.md)。管理控制台使用专门裁剪的
+`204×37` 浅色/深色横版标识，不复用 README 的大尺寸 lockup。
 
 ## 许可证
 

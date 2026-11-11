@@ -1,0 +1,71 @@
+<div id="header">
+  <ul id="topnav">
+    <li id="interval">
+      <label for="update-every" id="status"></label>
+      <select id="update-every">
+        <% if(settings.disable_stats) { %>
+         <option value=""><%= t('Do not refresh') %></option>
+         <option value="5000"><%= t('Refresh every 5 seconds') %></option>
+        <% } else { %>
+         <option value="5000"><%= t('Refresh every 5 seconds') %></option>
+        <% } %>
+        <option value="10000"><%= t('Refresh every 10 seconds') %></option>
+        <option value="30000"><%= t('Refresh every 30 seconds') %></option>
+        <% if(!settings.disable_stats) { %>
+         <option value=""><%= t('Do not refresh') %></option>
+        <% } %>
+      </select>
+    </li>
+    <li id="rmq-language"><%= rmqI18n.selectHtml() %></li>
+    <li id="vhost">
+      <label for="show-vhost"><%= t('Virtual host') %> </label>
+      <select id="show-vhost">
+        <option value=""><%= t('All') %></option>
+      </select>
+    </li>
+    <li id="logout">
+      <form action="#/logout" method="put">
+        <input type="submit" value="<%= t('Log out') %>"/>
+      </form>
+    </li>
+  </ul>
+  <div id="logo">
+    <a href="#/">
+      <span class="rmq-logo rmq-logo-light"><img src="img/rmq-logo-light.svg" alt="<%= t('RMQ Management Console') %>" width="204" height="37"/></span>
+      <span class="rmq-logo rmq-logo-dark"><img src="img/rmq-logo-dark.svg" alt="" aria-hidden="true" width="204" height="37"/></span>
+    </a>
+    <span id="versions"></span>
+  </div>
+  <br/>
+  <div id="warnings"></div>
+  <div id="menu">
+    <ul id="tabs">
+    </ul>
+  </div>
+</div>
+<div id="rhs"></div>
+<div id="main"></div>
+<div id="footer">
+  <ul>
+    <li><a rel="noopener noreferrer" href="api/" target="_blank">HTTP API</a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/docs" target="_blank"><%= t('Documentation') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/tutorials" target="_blank"><%= t('Tutorials') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/release-information" target="_blank"><%= t('New releases') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://www.vmware.com/products/rabbitmq.html" target="_blank"><%= t('Commercial edition') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/contact#tanzu-rabbitmq" target="_blank"><%= t('Commercial support') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://github.com/rabbitmq/rabbitmq-server/discussions" target="_blank"><%= t('Discussions') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://rabbitmq.com/discord/" target="_blank">Discord</a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/docs/plugins" target="_blank"><%= t('Plugins') %></a></li>
+    <li><a rel="noopener noreferrer" href="https://www.rabbitmq.com/github" target="_blank">GitHub</a></li>
+    <li><a rel="noopener noreferrer" href="https://github.com/scott-wong/rmq" target="_blank"><%= t('RMQ Project') %></a></li>
+  </ul>
+  <button
+    class="theme-switcher"
+    type="button"
+    title="<%= t('Switch between dark and light mode (currently auto mode)') %>"
+    aria-label="<%= t('Switch between dark and light mode (currently auto mode)') %>"
+    aria-live="polite"
+    aria-pressed="true"
+    x-scheme="auto">
+  </button>
+</div>

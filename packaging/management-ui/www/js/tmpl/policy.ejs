@@ -1,0 +1,37 @@
+<h1><%= t('Policy') %>: <b><%= fmt_string(policy.name) %></b><%= fmt_maybe_vhost(policy.vhost) %></h1>
+
+<div class="section">
+  <h2><%= t('Overview') %></h2>
+  <div class="hider">
+    <table class="facts">
+      <tr>
+        <th><%= t('Pattern') %></th>
+        <td><%= fmt_string(policy.pattern) %></td>
+      </tr>
+      <tr>
+        <th><%= t('Apply to') %></th>
+        <td><%= fmt_string(policy['apply-to']) %></td>
+      </tr>
+      <tr>
+        <th><%= t('Definition') %></th>
+        <td><%= fmt_table_short(policy.definition) %></td>
+      </tr>
+      <tr>
+        <th><%= t('Priority') %></th>
+        <td><%= fmt_string(policy.priority) %></td>
+      </tr>
+    </table>
+  </div>
+</div>
+
+<div class="section-hidden">
+  <h2><%= t('Delete this policy') %></h2>
+  <div class="hider">
+    <form action="#/policies" method="delete" class="confirm">
+      <input type="hidden" name="component" value="policy"/>
+      <input type="hidden" name="vhost" value="<%= fmt_string(policy.vhost) %>"/>
+      <input type="hidden" name="name" value="<%= fmt_string(policy.name) %>"/>
+      <input type="submit" value="<%= t('Delete this policy') %>"/>
+    </form>
+  </div>
+</div>

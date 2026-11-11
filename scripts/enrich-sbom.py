@@ -185,6 +185,35 @@ def main() -> int:
             description="setuid-less process privilege switcher",
         ),
     ]
+    if ssl_kind == "tongsuo":
+        inputs.append(
+            metadata(
+                name="rabbitmq-management-ui-rmq-fork",
+                version=env("RABBITMQ_VERSION"),
+                purl=(
+                    f"pkg:generic/rabbitmq-management-ui@{env('RABBITMQ_VERSION')}"
+                    "?fork=rmq"
+                ),
+                license_value="MPL-2.0",
+                source_url=(
+                    "https://github.com/rabbitmq/rabbitmq-server/tree/"
+                    "24d5157cd415ef396c8ecd40a2d08c4d7ad3da9f/"
+                    "deps/rabbitmq_management/priv/www"
+                ),
+                source_sha256="04d8d3746605e19a5a1dd38af90ed465ae38c7f6f61277515d3aa0ad9313232e",
+                description=(
+                    "RabbitMQ 4.4.0 management console static assets with "
+                    "RMQ zh-CN/en-US i18n and branding"
+                ),
+                properties={
+                    "rmq:management-ui-default-language": "zh-CN",
+                    "rmq:management-ui-languages": "zh-CN,en-US",
+                    "rmq:upstream-pristine-tree-sha256": (
+                        "04d8d3746605e19a5a1dd38af90ed465ae38c7f6f61277515d3aa0ad9313232e"
+                    ),
+                },
+            )
+        )
 
     for info in inputs:
         upsert_component(components, info["name"], info["purl"], info)

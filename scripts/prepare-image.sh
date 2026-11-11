@@ -18,6 +18,11 @@ ssl_prefix="${SSL_PREFIX:-/opt/openssl}"
 ssl_kind="${SSL_KIND:-openssl}"
 ssl_version="${SSL_VERSION:-${OPENSSL_VERSION}}"
 gm_plugin_available="${GM_PLUGIN_AVAILABLE:-false}"
+management_ui_source="/opt/rmq/stage/management-ui"
+management_ui_licenses="/opt/rmq/stage/management-ui-licenses"
+management_ui_target="$rabbitmq_home/plugins/rabbitmq_management-${RABBITMQ_VERSION}/priv/www"
+management_ui_license_target="/usr/local/share/rmq/licenses/rabbitmq-management"
+management_ui_available=false
 
 groupadd --gid 999 --system rabbitmq
 useradd --uid 999 --system \
@@ -91,6 +96,33 @@ if [ "$gm_plugin_available" = "true" ]; then
 fi
 gosu rabbitmq rabbitmq-plugins enable --offline "${plugins[@]}"
 
+if [ -f "$management_ui_source/index.html" ]; then
+    test -d "$management_ui_target"
+    test -s "$management_ui_source/js/management-ejs.js"
+    rm -rf "$management_ui_target"
+    mkdir -p "$management_ui_target"
+    cp -a "$management_ui_source"/. "$management_ui_target"/
+    cat > "$management_ui_target/js/rmq-build-info.js" <<EOF
+window.RMQ_BUILD_INFO = {
+  "product": "RMQ",
+  "version": "${RMQ_VERSION}",
+  "rabbitmqVersion": "${RABBITMQ_VERSION}",
+  "language": "zh-CN"
+};
+EOF
+    mkdir -p "$management_ui_license_target"
+    cp -a "$management_ui_licenses"/. "$management_ui_license_target"/
+    chown -R rabbitmq:rabbitmq "$management_ui_target" "$management_ui_license_target"
+    management_ui_available=true
+else
+    printf 'management UI fork not staged; keeping upstream management UI\n'
+fi
+
+management_ui_json='null'
+if [ "$management_ui_available" = "true" ]; then
+    management_ui_json='{"fork":"rabbitmq-management-4.4.0","defaultLanguage":"zh-CN","languages":["zh-CN","en-US"]}'
+fi
+
 [ ! -e "$rabbitmq_data_dir/.erlang.cookie" ] || rm -f "$rabbitmq_data_dir/.erlang.cookie"
 gosu rabbitmq rabbitmqctl help >/dev/null
 gosu rabbitmq rabbitmqctl list_ciphers >/dev/null
@@ -122,6 +154,7 @@ cat > /usr/local/share/rmq/build-info.json <<EOF
     "gosu": "${GOSU_VERSION}",
     "rabbitmqadmin": "${RABBITMQADMIN_VERSION}"
   },
+  "managementUi": ${management_ui_json},
   "base": {
     "image": "quay.io/openeuler/openeuler:${OPENEULER_RELEASE}",
     "digest": "${OPENEULER_BASE_DIGEST}"
@@ -140,6 +173,7 @@ cat > /usr/local/share/rmq/build-info.json <<EOF
     "nationalCryptographyTls": false,
     "nationalCryptographyStorage": ${gm_plugin_available},
     "nationalCryptographyAmqp10Storage": ${gm_plugin_available},
+    "chineseManagementUi": ${management_ui_available},
     "fipsCompliance": false,
     "clusterTested": false
   }

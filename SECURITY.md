@@ -31,6 +31,23 @@ the issue applies to the official RabbitMQ image.
 Security reports that require modifying upstream RabbitMQ behavior should
 state whether the same behavior exists in the official image.
 
+## Management console fork
+
+- The default Tongsuo image replaces only the management plugin's static
+  `priv/www` assets. RabbitMQ management API routes, authentication,
+  authorization and Erlang handlers are unchanged.
+- The Chinese catalog contains static labels only. User-controlled names,
+  routing keys, messages, headers and server error text are not passed through
+  `t()` as translation keys.
+- Language preference is stored in browser `localStorage` under
+  `rmq-language`; theme preference is the upstream `color-scheme` value. Neither
+  value contains credentials.
+- The UI keeps the upstream Content Security Policy model: external local
+  scripts only, no inline event handlers and no `unsafe-eval` for EJS.
+- Translation coverage is intentionally scoped to core console screens.
+  Protocol fields, raw errors, API documentation and third-party notices remain
+  in English; this is not a claim of complete Chinese localization.
+
 ## Tongsuo default variant
 
 - The default Tongsuo `8.5.0` variant uses a `3.5.4` OpenSSL source baseline.

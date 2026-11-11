@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="rmq-favicon-title">
+  <title id="rmq-favicon-title">RMQ</title>
+  <rect x="4" y="4" width="120" height="120" rx="28" fill="#101F32"/>
+  <g transform="translate(8 8)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M56 8 L98 32 L98 80 L56 104 L14 80 L14 32 Z" stroke="#F4F7FB" stroke-width="7"/>
+    <path d="M28 41 H51 M28 56 H51 M28 71 H51" stroke="#28B8C4" stroke-width="8"/>
+    <path d="M51 41 L64 56 L51 71" stroke="#28B8C4" stroke-width="8"/>
+    <rect x="63" y="44" width="27" height="24" rx="6" fill="#F2B45C"/>
+    <path d="M70 56 L75 61 L83 51" stroke="#101F32" stroke-width="4"/>
+  </g>
+</svg>

@@ -1,0 +1,4 @@
+# The management console is a source-level vendor fork. Preserve upstream
+# whitespace exactly so future three-way comparisons remain meaningful.
+packaging/management-ui/www/** whitespace=-trailing-space,-blank-at-eof
+packaging/management-ui/licenses/** whitespace=-trailing-space,-blank-at-eof

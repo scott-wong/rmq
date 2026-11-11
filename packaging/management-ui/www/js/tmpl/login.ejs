@@ -1,0 +1,25 @@
+<div id="login">
+  <div class="rmq-login-language"><%= rmqI18n.selectHtml() %></div>
+  <p>
+    <span class="rmq-logo rmq-logo-light"><img src="img/rmq-logo-light.svg" alt="<%= t('RMQ Management Console') %>" width="204" height="37"/></span>
+    <span class="rmq-logo rmq-logo-dark"><img src="img/rmq-logo-dark.svg" alt="" aria-hidden="true" width="204" height="37"/></span>
+  </p>
+
+  <form action="#/login" method="put">
+    <div id="login-status"></div>
+    <table class="form">
+      <tr>
+        <th><label for="username"><%= t('Username:') %></label></th>
+        <td><input id="username" type="text" name="username" autofocus autocomplete="username"/><span class="mand">*</span></td>
+      </tr>
+      <tr>
+        <th><label for="password"><%= t('Password:') %></label></th>
+        <td><input id="password" type="password" name="password" autocomplete="current-password"/><span class="mand">*</span></td>
+      </tr>
+      <tr>
+        <th>&nbsp;</th>
+        <td><input type="submit" value="<%= t('Login') %>"/></td>
+      </tr>
+    </table>
+  </form>
+</div>

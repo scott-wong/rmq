@@ -6,6 +6,7 @@ RMQ-owned scripts, documentation and configuration, not to upstream components.
 | Component | Version | License | Source |
 |---|---:|---|---|
 | RabbitMQ server and bundled plugins | 4.4.0 | MPL-2.0; selected files Apache-2.0 | https://github.com/rabbitmq/rabbitmq-server/releases/tag/v4.4.0 |
+| RabbitMQ management console static assets (RMQ fork) | 4.4.0, upstream commit `24d5157c` | MPL-2.0; bundled MIT/BSD/ISC notices | `packaging/management-ui/UPSTREAM.md` |
 | Erlang/OTP | 29.1.2 | Apache-2.0 | https://github.com/erlang/otp/releases/tag/OTP-29.1.2 |
 | OpenSSL | 3.5.9 | Apache-2.0 | https://github.com/openssl/openssl/releases/tag/openssl-3.5.9 |
 | Tongsuo (default variant) | 8.5.0; OpenSSL 3.5.4 source baseline | Apache-2.0 | https://github.com/Tongsuo-Project/Tongsuo/releases/tag/8.5.0 |
@@ -28,6 +29,12 @@ which RMQ's entrypoint behavior was adapted is reproduced at
 The Apache License 2.0 text is reproduced in the repository root `LICENSE`. The
 MPL 2.0 license shipped by RabbitMQ is included by the upstream generic
 Unix archive and distributed with the resulting image.
+
+The default Tongsuo image also ships the management-console fork's upstream
+license set under `/usr/local/share/rmq/licenses/rabbitmq-management/`. The
+fork's provenance, pristine tree digest and modification summary are recorded
+in `packaging/management-ui/UPSTREAM.md`. New RMQ-authored files remain
+Apache-2.0; modified upstream static files are distributed under MPL-2.0.
 
 No upstream trademark, certification or support relationship is claimed. The
 RMQ name identifies this independent container build.

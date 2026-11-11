@@ -121,9 +121,18 @@ jobs:
           SSL_VERSION_PATTERN='Tongsuo: Tongsuo 8.5.0' \
           SSL_LICENSE_NAME=tongsuo \
           GM_STORAGE=1 \
+          UI_TEST=1 \
           EXPECTED_VARIANT=tongsuo-openeuler \
             bash scripts/smoke-docker.sh \
               "${{ needs.validate.outputs.repo }}:${{ needs.validate.outputs.version }}-tongsuo-openeuler-candidate"
+      - name: Upload management UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rmq-management-ui-screenshots
+          path: artifacts/ui/
+          retention-days: 30
+          if-no-files-found: warn
 
   supply-chain:
     name: Scan candidate

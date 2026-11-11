@@ -11,6 +11,21 @@ version="$(tr -d ' \n' < "$ROOT_DIR/VERSION")"
 [[ "$version" =~ ^${RABBITMQ_VERSION}\-rmq\.[0-9]+$ ]] \
     || die "VERSION must be ${RABBITMQ_VERSION}-rmq.<N>, got: $version"
 
+python3 "$ROOT_DIR/scripts/check-management-ui.py" "$ROOT_DIR"
+
+if command -v node >/dev/null 2>&1; then
+    for javascript in \
+        "$ROOT_DIR/packaging/management-ui/www/js/rmq-i18n.js" \
+        "$ROOT_DIR/packaging/management-ui/www/js/rmq-layout.js" \
+        "$ROOT_DIR/packaging/management-ui/www/js/rmq-locales.js" \
+        "$ROOT_DIR/packaging/management-ui/www/js/theme-switcher.js"; do
+        node --check "$javascript"
+        printf '[ok] javascript %s\n' "${javascript#"$ROOT_DIR"/}"
+    done
+else
+    printf '[skip] Node.js syntax check unavailable\n'
+fi
+
 for variable in OPENSSL_SHA256 OTP_SHA256 GOSU_SOURCE_SHA256 \
     RABBITMQ_TARBALL_SHA256 RABBITMQADMIN_SHA256 TONGSHUO_SHA256 \
     COSIGN_SHA256 SYFT_SHA256 TRIVY_SHA256 CRANE_SHA256; do
@@ -34,6 +49,8 @@ done
     || die "GOLANG_BASE must be digest-pinned"
 [[ "$TEST_PYTHON_IMAGE" == *"@sha256:"* ]] \
     || die "TEST_PYTHON_IMAGE must be digest-pinned"
+[[ "$PLAYWRIGHT_IMAGE" == *"@sha256:"* ]] \
+    || die "PLAYWRIGHT_IMAGE must be digest-pinned"
 
 while IFS= read -r -d '' script; do
     bash -n "$script"
@@ -89,6 +106,16 @@ grep -q 'io.rmq.gm.amqp10-body-encryption="true"' "$tongsuo_dockerfile" \
     || die "Tongsuo variant must label AMQP 1.0 body encryption"
 grep -q 'COPY --from=gm-plugin-builder' "$tongsuo_dockerfile" \
     || die "Tongsuo Dockerfile must install the GM plugin"
+grep -q 'AS management-ui-builder' "$tongsuo_dockerfile" \
+    || die "Tongsuo Dockerfile is missing the management UI builder"
+grep -q 'precompile_ejs_templates' "$tongsuo_dockerfile" \
+    || die "management UI EJS templates must be precompiled"
+grep -q 'COPY --from=management-ui-builder' "$tongsuo_dockerfile" \
+    || die "Tongsuo Dockerfile must install the RMQ management UI fork"
+grep -q 'management_ui_target=' "$ROOT_DIR/scripts/prepare-image.sh" \
+    || die "prepare-image.sh must install the RMQ management UI"
+grep -q 'rmq-build-info.js' "$ROOT_DIR/scripts/prepare-image.sh" \
+    || die "management UI build information is not generated"
 grep -q 'Dockerfile.tongsuo' "$ROOT_DIR/Makefile" \
     || die "Makefile must build Tongsuo by default"
 grep -q 'rabbitmq_amqp1_0' "$ROOT_DIR/scripts/prepare-image.sh" \

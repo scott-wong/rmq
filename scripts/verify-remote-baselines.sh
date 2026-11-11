@@ -36,3 +36,5 @@ check_reference "Go builder base" "$GOLANG_BASE" \
     "${GOLANG_BASE##*@}"
 check_reference "Python test image" "$TEST_PYTHON_IMAGE" \
     "${TEST_PYTHON_IMAGE##*@}"
+check_reference "Playwright test image" "$PLAYWRIGHT_IMAGE" \
+    "${PLAYWRIGHT_IMAGE##*@}"

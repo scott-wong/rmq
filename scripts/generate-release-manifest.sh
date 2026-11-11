@@ -64,6 +64,7 @@ jq -n \
     --arg gosuSha "$GOSU_SOURCE_SHA256" \
     --arg adminVersion "$RABBITMQADMIN_VERSION" \
     --arg adminSha "$RABBITMQADMIN_SHA256" \
+    --arg managementUiFork "rabbitmq-management-4.4.0" \
     --arg sbom "$(basename "$SBOM_PATH")" \
     --arg trivySarif "$(basename "$TRIVY_SARIF_PATH")" \
     --arg trivyText "$(basename "$TRIVY_TEXT_PATH")" \
@@ -99,7 +100,12 @@ jq -n \
             cveParityWithStandardOpenSSL: "not-audited"
           },
           gosu: { version: $gosuVersion, archiveSha256: $gosuSha },
-          rabbitmqadmin: { version: $adminVersion, archiveSha256: $adminSha }
+          rabbitmqadmin: { version: $adminVersion, archiveSha256: $adminSha },
+          managementUi: {
+            fork: $managementUiFork,
+            defaultLanguage: "zh-CN",
+            languages: ["zh-CN", "en-US"]
+          }
         } else {
           rabbitmq: { version: $rabbitmqVersion, archiveSha256: $rabbitmqSha },
           erlangOtp: { version: $otpVersion, archiveSha256: $otpSha },
@@ -120,7 +126,10 @@ jq -n \
         guestLoopbackOnly: "passed"
       } + (if $sslKind == "tongsuo" then {
         gmMessageBodyStorage: "passed",
-        gmAmqp10MessageBodyStorage: "passed"
+        gmAmqp10MessageBodyStorage: "passed",
+        managementUi: "passed",
+        managementUiLanguages: "passed",
+        managementUiThemes: "passed"
       } else {} end)),
       artifacts: {
         sbomCycloneDx: $sbom,
@@ -147,6 +156,7 @@ jq -n \
         nationalCryptographyTls: false,
         nationalCryptographyStorage: ($sslKind == "tongsuo"),
         nationalCryptographyAmqp10Storage: ($sslKind == "tongsuo"),
+        chineseManagementUi: ($sslKind == "tongsuo"),
         fipsCompliance: false,
         clusterTested: false,
         kubernetesTested: false
