@@ -12,7 +12,7 @@ RMQ 是一个独立维护的 openEuler RabbitMQ 4.4 management 容器发行版�
 静态存储加密，并包含默认中文、可切换英文的 RMQ 管理控制台：
 
 ```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
+ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler
 ```
 
 - `linux/amd64`
@@ -47,7 +47,7 @@ docker run --detach \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler
 ```
 
 管理界面为 `http://127.0.0.1:15672/`，Prometheus 指标为
@@ -134,7 +134,7 @@ docker run --detach \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-gm-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler
 ```
 
 这是**消息 body 的静态存储保护**，不是全盘加密。queue index、Mnesia、headers、
@@ -180,12 +180,13 @@ RabbitMQ 4.4 在只配置 `management.ssl.*` 时会进入 HTTPS-only 模式，�
 `VERSION` 是唯一版本事实源，格式为 `<上游版本>-rmq.<修订号>`。当前版本线：
 
 ```text
-ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler  # 不可移动的完整版本
+ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler  # 不可移动的完整版本
 ghcr.io/scott-wong/rmq:4.4.0-tongsuo-openeuler         # 上游线别名
 ghcr.io/scott-wong/rmq:latest-tongsuo-openeuler        # 浮动别名
 ```
 
-已经发布的 `4.4.0-rmq.1-openeuler` 和 `4.4.0-rmq.2-tongsuo-openeuler` 不会移动。
+已经发布的 `4.4.0-rmq.1-openeuler`、`4.4.0-rmq.2-tongsuo-openeuler` 和
+`4.4.0-rmq.3-tongsuo-openeuler` 不会移动。
 同一上游版本需要安全重建时 bump `rmq.N`；不覆盖完整版本标签，也不把 Tongsuo
 镜像伪装成标准 OpenSSL 变体。
 
@@ -246,10 +247,10 @@ attestation。
 ```sh
 cosign verify \
   --certificate-identity \
-    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.3' \
+    'https://github.com/scott-wong/rmq/.github/workflows/publish.yml@refs/tags/v4.4.0-rmq.4' \
   --certificate-oidc-issuer \
     'https://token.actions.githubusercontent.com' \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler
 ```
 
 Trivy 阻断 `HIGH`/`CRITICAL` 中已有修复版本的漏洞与 secret 命中；未修复漏洞仍会

@@ -21,6 +21,6 @@
 | **key id** | 写入消息 annotation 的密钥标识，默认 `v1`；当前用于 AAD 和未来轮换设计，尚未实现多密钥热轮换。 |
 | **FIPS** | 联邦信息处理标准。即使 OpenSSL 构建启用了 FIPS provider，RMQ 也不宣称 FIPS 认证或合规。 |
 | **CVE parity** | 某密码库与其上游 OpenSSL 版本在 CVE 修复状态上的等价性。Tongsuo `8.5.0` 基于 OpenSSL `3.5.4`，RMQ **未审计**其与 OpenSSL `3.5.9` 的 CVE 等价性。 |
-| **正式发布** | 具有不可移动 tag、GitHub Release、签名 digest 和发布清单的版本。`v4.4.0-rmq.1` 是历史标准变体，`v4.4.0-rmq.2` 是首个默认 Tongsuo 版本，`v4.4.0-rmq.3` 增加中文管理控制台 fork。 |
+| **正式发布** | 具有不可移动 tag、GitHub Release、签名 digest 和发布清单的版本。`v4.4.0-rmq.1` 是历史标准变体，`v4.4.0-rmq.2` 是首个默认 Tongsuo 版本，`v4.4.0-rmq.3` 增加中文管理控制台 fork，`v4.4.0-rmq.4` 精简控制台页脚并补齐集群名称页中文。 |
 | **RMQ 管理控制台** | 基于 RabbitMQ 4.4.0 `rabbitmq_management` 静态 `priv/www` 的源级 fork；默认中文，可切英文，只替换 UI 静态资源，不改 management API。 |
 | **控制台语言覆盖** | 显式 `t()` 包装的界面文本必须有 `zh-CN` 译文；协议字段、原始错误、API 文档和许可证文本保持英文，不宣称 100% 全量翻译。 |

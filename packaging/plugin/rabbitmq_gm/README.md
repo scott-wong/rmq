@@ -67,7 +67,7 @@ docker run --detach \
   --publish 15672:15672 \
   --publish 15692:15692 \
   --volume rmq-gm-data:/var/lib/rabbitmq \
-  ghcr.io/scott-wong/rmq:4.4.0-rmq.3-tongsuo-openeuler
+  ghcr.io/scott-wong/rmq:4.4.0-rmq.4-tongsuo-openeuler
 ```
 
 RMQ 入口脚本会把只读密钥复制到 `/run/rmq/gm.key`，再交给 `rabbitmq` 用户。

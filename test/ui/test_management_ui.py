@@ -109,7 +109,23 @@ def main() -> int:
         expect(page.locator("#tabs")).to_contain_text("队列")
         expect(page.locator("#tabs")).to_contain_text("管理")
         assert_content_clears_header(page)
-        expected_version = env("RMQ_VERSION", "4.4.0-rmq.3")
+        footer_links = {
+            text.strip() for text in page.locator("#footer a").all_inner_texts()
+        }
+        removed = {
+            "新版本",
+            "商业版",
+            "商业支持",
+            "讨论",
+            "Discord",
+            "插件",
+            "GitHub",
+        }
+        leaked = sorted(removed & footer_links)
+        if leaked:
+            raise RuntimeError(f"removed footer links are still present: {leaked}")
+
+        expected_version = env("RMQ_VERSION", "4.4.0-rmq.4")
         expect(page.locator("#versions")).to_contain_text(f"RMQ {expected_version}")
         if "RabbitMQ" in page.locator("#versions").inner_text():
             raise RuntimeError("RabbitMQ leaked into the header version badge")
@@ -121,6 +137,21 @@ def main() -> int:
         page.evaluate("location.hash = '#/users'")
         expect(page.locator("#main h1")).to_contain_text("用户", timeout=30000)
         page.screenshot(path=artifacts / "users-zh-CN-light.png", full_page=True)
+
+        page.evaluate("location.hash = '#/cluster-name'")
+        expect(page.locator("#main h1")).to_contain_text("集群名称", timeout=30000)
+        expect(page.locator("#main")).to_contain_text(
+            "客户端可以通过 AMQP 连接使用集群名称识别集群"
+        )
+        expect(page.locator("#main input[type='submit']").last).to_have_value(
+            "修改名称"
+        )
+        if "Change name" in page.locator("#main").inner_text():
+            raise RuntimeError("cluster name page still contains English labels")
+        page.screenshot(
+            path=artifacts / "cluster-name-zh-CN-light.png",
+            full_page=True,
+        )
 
         page.evaluate("location.hash = '#/'")
         expect(page.locator("#main h1")).to_contain_text("概览", timeout=30000)
